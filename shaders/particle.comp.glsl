@@ -23,50 +23,77 @@ layout(push_constant) uniform Push
     float mouseY;
 } push;
 
-float hash(float n)
+uint hashUint(uint x)
 {
-    return fract(sin(n * 127.1) * 43758.5453);
+    x ^= x >> 16;
+    x *= 0x7FEB352Du;
+    x ^= x >> 15;
+    x *= 0x846CA68Bu;
+    x ^= x >> 16;
+
+    return x;
 }
 
-float field(float x, float y)
+float random01(uint seed)
 {
-    float a = sin(
-        x * 0.011 +
-        sin(y * 0.014) * 2.1
-    );
+    return float(hashUint(seed)) * 2.3283064365386963e-10;
+}
 
-    float b = sin(
-        y * 0.013 +
-        cos(x * 0.010) * 1.8
+vec3 random3(uint seed)
+{
+    return vec3(
+        random01(seed * 0x9E3779B9u + 0x68BC21EBu),
+        random01(seed * 0x85EBCA6Bu + 0x02E5BE93u),
+        random01(seed * 0xC2B2AE35u + 0x27D4EB2Fu)
     );
-
-    float c = sin(
-        (x + y) * 0.007
-    );
-
-    float d = cos(
-        (x - y) * 0.009
-    );
-
-    return
-        a * 0.45 +
-        b * 0.35 +
-        c * 0.20 +
-        d * 0.15;
 }
 
 vec2 flowField(float x, float y)
 {
-    float eps = 1.0;
+    float sx = sin(x * 0.010);
+    float cx = cos(x * 0.010);
 
-    float left  = field(x - eps, y);
-    float right = field(x + eps, y);
+    float sy = sin(y * 0.014);
+    float cy = cos(y * 0.014);
 
-    float down  = field(x, y - eps);
-    float up    = field(x, y + eps);
+    float ax = x * 0.011 + sy * 2.1;
+    float ay = y * 0.013 + cx * 1.8;
 
-    float dFdx = (right - left) * 0.5;
-    float dFdy = (up - down) * 0.5;
+    float sinAx = sin(ax);
+    float cosAx = cos(ax);
+
+    float sinAy = sin(ay);
+    float cosAy = cos(ay);
+
+    float xy = (x + y) * 0.007;
+    float xd = (x - y) * 0.009;
+
+    float cosXY = cos(xy);
+    float sinXD = sin(xd);
+
+    float dA_dx = cosAx * 0.011;
+    float dA_dy = cosAx * cy * 0.0294;
+
+    float dB_dx = -cosAy * sx * 0.018;
+    float dB_dy = cosAy * 0.013;
+
+    float dC_dx = cosXY * 0.007;
+    float dC_dy = cosXY * 0.007;
+
+    float dD_dx = -sinXD * 0.009;
+    float dD_dy =  sinXD * 0.009;
+
+    float dFdx =
+        dA_dx * 0.45 +
+        dB_dx * 0.35 +
+        dC_dx * 0.20 +
+        dD_dx * 0.15;
+
+    float dFdy =
+        dA_dy * 0.45 +
+        dB_dy * 0.35 +
+        dC_dy * 0.20 +
+        dD_dy * 0.15;
 
     return vec2(
         dFdy,
@@ -83,12 +110,11 @@ void main()
 
     Particle p = particles[id];
 
-    float seed = float(id);
+    vec3 rnd = random3(id);
 
-    float n1 = hash(seed * 1.173);
-    float n2 = hash(seed * 2.731);
-    float n3 = hash(seed * 4.217);
-    float n4 = hash(seed * 7.913);
+    float randomX = rnd.x * 2.0 - 1.0;
+    float randomY = rnd.y * 2.0 - 1.0;
+    float radialRandom = rnd.z * 2.0 - 1.0;
 
     float dx = p.x - push.mouseX;
     float dy = p.y - push.mouseY;
@@ -97,64 +123,80 @@ void main()
         dx * dx +
         dy * dy;
 
-    float dist = sqrt(distSq);
+    float safeDistSq =
+        max(distSq, 0.000001);
+
+    float invDist =
+        inversesqrt(safeDistSq);
+
+    float dist =
+        distSq * invDist;
+
+    float nx =
+        dx * invDist;
+
+    float ny =
+        dy * invDist;
 
     float radius = 180.0;
 
-    if (dist > 0.001)
-    {
-        float nx = dx / dist;
-        float ny = dy / dist;
+    float outside =
+        max(dist - radius, 0.0);
 
-        if (dist > radius)
-        {
-            float outside = dist - radius;
+    float boundaryForce =
+        outside * 0.0035;
 
-            float boundaryForce = outside * 0.0035;
+    p.vx -=
+        nx * boundaryForce;
 
-            p.vx -= nx * boundaryForce;
-            p.vy -= ny * boundaryForce;
-        }
+    p.vy -=
+        ny * boundaryForce;
 
-        if (dist < 8.0)
-        {
-            float centerForce =
-                (8.0 - dist) * 0.003;
+    float centerForce =
+        max(8.0 - dist, 0.0) * 0.003;
 
-            p.vx += nx * centerForce;
-            p.vy += ny * centerForce;
-        }
-    }
+    p.vx +=
+        nx * centerForce;
 
-    vec2 flow = flowField(p.x, p.y);
+    p.vy +=
+        ny * centerForce;
 
-    float flowLength = length(flow);
+    vec2 flow =
+        flowField(p.x, p.y);
 
-    if (flowLength > 0.000001)
-    {
-        flow /= flowLength;
-    }
+    float flowSq =
+        dot(flow, flow);
+
+    float invFlowLength =
+        inversesqrt(
+            max(flowSq, 0.000001)
+        );
+
+    flow *= invFlowLength;
 
     float flowStrength = 0.13;
 
-    p.vx += flow.x * flowStrength;
-    p.vy += flow.y * flowStrength;
+    p.vx +=
+        flow.x * flowStrength;
 
-    float randomX =
-        n2 * 2.0 - 1.0;
-
-    float randomY =
-        n3 * 2.0 - 1.0;
+    p.vy +=
+        flow.y * flowStrength;
 
     float dispersion = 0.11;
 
-    p.vx += randomX * dispersion;
-    p.vy += randomY * dispersion;
+    p.vx +=
+        randomX * dispersion;
+
+    p.vy +=
+        randomY * dispersion;
 
     float sideStrength = 0.055;
 
-    p.vx += -flow.y * sideStrength;
-    p.vy +=  flow.x * sideStrength;
+    p.vx +=
+        -flow.y * sideStrength;
+
+    p.vy +=
+         flow.x * sideStrength;
 
     float mouseInfluence =
         clamp(
@@ -163,37 +205,31 @@ void main()
             1.0
         );
 
-    if (dist > 0.001)
-    {
-        float nx = dx / dist;
-        float ny = dy / dist;
+    float mouseCurl = 0.035;
 
-        float mouseCurl = 0.035;
+    p.vx +=
+        -ny *
+        mouseCurl *
+        mouseInfluence;
 
-        p.vx += -ny * mouseCurl * mouseInfluence;
-        p.vy +=  nx * mouseCurl * mouseInfluence;
-    }
+    p.vy +=
+         nx *
+         mouseCurl *
+         mouseInfluence;
 
-    if (dist > 0.001)
-    {
-        float nx = dx / dist;
-        float ny = dy / dist;
+    float radialStrength = 0.035;
 
-        float radialRandom =
-            n4 * 2.0 - 1.0;
+    p.vx +=
+        nx *
+        radialRandom *
+        radialStrength *
+        mouseInfluence;
 
-        float radialStrength = 0.035;
-
-        p.vx += nx *
-                radialRandom *
-                radialStrength *
-                mouseInfluence;
-
-        p.vy += ny *
-                radialRandom *
-                radialStrength *
-                mouseInfluence;
-    }
+    p.vy +=
+        ny *
+        radialRandom *
+        radialStrength *
+        mouseInfluence;
 
     float damping =
         mix(
@@ -209,7 +245,13 @@ void main()
         p.vx * p.vx +
         p.vy * p.vy;
 
-    float speed = sqrt(speedSq);
+    float invSpeed =
+        inversesqrt(
+            max(speedSq, 0.000001)
+        );
+
+    float speed =
+        speedSq * invSpeed;
 
     float maxSpeed =
         mix(
@@ -218,14 +260,14 @@ void main()
             mouseInfluence
         );
 
-    if (speed > maxSpeed)
-    {
-        float scale =
-            maxSpeed / speed;
+    float speedScale =
+        min(
+            1.0,
+            maxSpeed * invSpeed
+        );
 
-        p.vx *= scale;
-        p.vy *= scale;
-    }
+    p.vx *= speedScale;
+    p.vy *= speedScale;
 
     p.x += p.vx;
     p.y += p.vy;

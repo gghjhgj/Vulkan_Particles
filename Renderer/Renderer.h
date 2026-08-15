@@ -12,6 +12,8 @@
 #include <vector>
 #include <cstdint>
 
+class ImGuiManager;
+
 struct ParticleRenderPushConstant
 {
     float width;
@@ -21,6 +23,7 @@ struct ParticleRenderPushConstant
 class Renderer
 {
 public:
+    VkFormat getSwapchainFormat() const;
     static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
     Renderer() = default;
@@ -33,7 +36,7 @@ public:
         uint32_t particleCount
     );
 
-    void render();
+    void render(ImGuiManager& imgui);
 
     void destroy();
 

@@ -1,4 +1,5 @@
 #include "Renderer.h"
+#include "ImGuiManager.h"
 
 #include <stdexcept>
 #include <iostream>
@@ -15,7 +16,10 @@ Renderer::~Renderer()
 {
     destroy();
 }
-
+VkFormat Renderer::getSwapchainFormat() const
+{
+    return swapchain.imageFormat;
+}
 void Renderer::init(
     VulkanContext& context,
     sf::Window& window)
@@ -272,7 +276,7 @@ void Renderer::setParticleBuffer(
     particlesConfigured = true;
 }
 
-void Renderer::render()
+void Renderer::render(ImGuiManager &imgui)
 {
     if (!initialized)
         return;
@@ -483,6 +487,8 @@ void Renderer::render()
         0,
         0
     );
+
+    imgui.render(commandBuffer);
 
     vkCmdEndRendering(
         commandBuffer

@@ -1,0 +1,104 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 21,
+        "patch": 0
+    },
+
+    "configurePresets": [
+        {
+            "name": "debug",
+            "displayName": "Debug - GCC",
+            "description": "GCC debug build",
+            "generator": "MinGW Makefiles",
+
+            "binaryDir": "${sourceDir}/build/debug",
+
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "BUILD_SHADERS": "ON",
+                "USE_MIMALLOC": "ON",
+                "USE_DEAR_IMGUI": "ON"
+            }
+        },
+
+        {
+            "name": "release",
+            "displayName": "Release - GCC",
+            "description": "Optimized GCC release build",
+            "generator": "MinGW Makefiles",
+
+            "binaryDir": "${sourceDir}/build/release",
+
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BUILD_SHADERS": "ON",
+                "USE_MIMALLOC": "ON",
+                "USE_DEAR_IMGUI": "ON"
+            }
+        },
+
+        {
+            "name": "release-no-imgui",
+            "displayName": "Release - GCC - No ImGui",
+            "description": "Optimized build without Dear ImGui",
+            "generator": "MinGW Makefiles",
+
+            "binaryDir": "${sourceDir}/build/release-no-imgui",
+
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BUILD_SHADERS": "ON",
+                "USE_MIMALLOC": "ON",
+                "USE_DEAR_IMGUI": "OFF"
+            }
+        },
+
+        {
+            "name": "clang-release",
+            "displayName": "Release - Clang",
+            "description": "Optimized Clang build",
+            "generator": "MinGW Makefiles",
+
+            "binaryDir": "${sourceDir}/build/clang-release",
+
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+
+                "BUILD_SHADERS": "ON",
+                "USE_MIMALLOC": "ON",
+                "USE_DEAR_IMGUI": "ON"
+            }
+        }
+    ],
+
+    "buildPresets": [
+        {
+            "name": "build-debug",
+            "configurePreset": "debug",
+            "jobs": 0
+        },
+
+        {
+            "name": "build-release",
+            "configurePreset": "release",
+            "jobs": 0
+        },
+
+        {
+            "name": "build-release-no-imgui",
+            "configurePreset": "release-no-imgui",
+            "jobs": 0
+        },
+
+        {
+            "name": "build-clang-release",
+            "configurePreset": "clang-release",
+            "jobs": 0
+        }
+    ]
+}

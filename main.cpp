@@ -1,5 +1,6 @@
 #include "Renderer/Renderer.h"
 #include "Particles/ParticleSystem.h"
+#include "Renderer/ImGuiManager.h"
 
 #include <SFML/Window.hpp>
 
@@ -12,6 +13,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <vector>
+#include <optional>
 
 int main()
 {
@@ -21,35 +23,52 @@ int main()
             sf::VideoMode({1280, 720}),
             "Particle Simulation",
             sf::Style::Default,
-            sf::State::Windowed);
+            sf::State::Windowed
+        );
 
-        std::vector<const char *> extensions =
-            {
-                VK_KHR_SURFACE_EXTENSION_NAME,
+        std::vector<const char*> extensions =
+        {
+            VK_KHR_SURFACE_EXTENSION_NAME,
 
 #ifdef _WIN32
-                VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+            VK_KHR_WIN32_SURFACE_EXTENSION_NAME
 #endif
-            };
+        };
 
         VulkanContext vulkanContext;
 
         vulkanContext.initInstance(
-            extensions);
+            extensions
+        );
 
         Renderer renderer;
 
         renderer.init(
             vulkanContext,
-            window);
+            window
+        );
 
         ParticleSystem particles;
 
-        particles.init(vulkanContext, 1000000, 1280, 720);
+        particles.init(
+            vulkanContext,
+            1000000,
+            1280,
+            720
+        );
 
         renderer.setParticleBuffer(
             particles.getBuffer(),
-            particles.getCount());
+            particles.getCount()
+        );
+
+        ImGuiManager imgui;
+
+        imgui.init(
+            vulkanContext,
+            window,
+            renderer.getSwapchainFormat()
+        );
 
         bool running = true;
 
@@ -57,37 +76,55 @@ int main()
         {
             while (const std::optional event = window.pollEvent())
             {
+                imgui.processEvent(*event);
+
                 if (event->is<sf::Event::Closed>())
                 {
                     running = false;
                 }
 
-                if (const auto *resized = event->getIf<sf::Event::Resized>())
+                if (const auto* resized =
+                        event->getIf<sf::Event::Resized>())
                 {
                     (void)resized;
                 }
             }
 
-            sf::Vector2i mousePos = sf::Mouse::getPosition(window);
-            
-            float mouseX = static_cast<float>(mousePos.x);
-            float mouseY = static_cast<float>(mousePos.y);
+            imgui.newFrame(window);
 
-            particles.update(vulkanContext, mouseX, mouseY);
+            sf::Vector2i mousePos =
+                sf::Mouse::getPosition(window);
 
-            renderer.render();
+            float mouseX =
+                static_cast<float>(mousePos.x);
+
+            float mouseY =
+                static_cast<float>(mousePos.y);
+
+            particles.update(
+                vulkanContext,
+                mouseX,
+                mouseY
+            );
+
+            renderer.render(imgui);
         }
 
-        vkDeviceWaitIdle(vulkanContext.device);
-    
+        vkDeviceWaitIdle(
+            vulkanContext.device
+        );
+
+        imgui.destroy();
+
         particles.destroy(
-            vulkanContext.device);
+            vulkanContext.device
+        );
 
         renderer.destroy();
 
         vulkanContext.destroy();
     }
-    catch (const std::exception &e)
+    catch (const std::exception& e)
     {
         std::cerr
             << "FATAL ERROR: "
