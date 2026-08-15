@@ -1,7 +1,7 @@
 #include "Renderer/Renderer.h"
 #include "Particles/ParticleSystem.h"
 #include "Renderer/ImGuiManager.h"
-
+#include "Config/Config.h"
 #include <SFML/Window.hpp>
 
 #define WIN32_LEAN_AND_MEAN
@@ -19,8 +19,9 @@ int main()
 {
     try
     {
+        Config::load("Config/config.ini");
         sf::Window window(
-            sf::VideoMode({1280, 720}),
+            sf::VideoMode({Config::window.width, Config::window.height}),
             "Particle Simulation",
             sf::Style::Default,
             sf::State::Windowed
@@ -52,7 +53,7 @@ int main()
 
         particles.init(
             vulkanContext,
-            1000000,
+            Config::particles.count,
             1280,
             720
         );

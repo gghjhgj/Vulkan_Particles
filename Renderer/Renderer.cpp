@@ -16,10 +16,12 @@ Renderer::~Renderer()
 {
     destroy();
 }
+
 VkFormat Renderer::getSwapchainFormat() const
 {
     return swapchain.imageFormat;
 }
+
 void Renderer::init(
     VulkanContext& context,
     sf::Window& window)
@@ -59,6 +61,29 @@ void Renderer::init(
     for (auto& frame : frames)
     {
         frame.init(*vkContext);
+    }
+
+    renderFinishedSemaphores.resize(
+        swapchain.images.size()
+    );
+
+    VkSemaphoreCreateInfo semaphoreInfo{};
+
+    semaphoreInfo.sType =
+        VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    for (auto& semaphore : renderFinishedSemaphores)
+    {
+        if (vkCreateSemaphore(
+                vkContext->device,
+                &semaphoreInfo,
+                nullptr,
+                &semaphore) != VK_SUCCESS)
+        {
+            throw std::runtime_error(
+                "Failed to create render finished semaphore."
+            );
+        }
     }
 
     createParticlePipeline();
@@ -136,9 +161,12 @@ void Renderer::createParticlePipeline()
     VkDescriptorSetLayoutBinding binding{};
 
     binding.binding = 0;
+
     binding.descriptorType =
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+
     binding.descriptorCount = 1;
+
     binding.stageFlags =
         VK_SHADER_STAGE_VERTEX_BIT;
 
@@ -254,7 +282,6 @@ void Renderer::setParticleBuffer(
         particleDescriptorSet;
 
     write.dstBinding = 0;
-
     write.dstArrayElement = 0;
 
     write.descriptorType =
@@ -276,7 +303,7 @@ void Renderer::setParticleBuffer(
     particlesConfigured = true;
 }
 
-void Renderer::render(ImGuiManager &imgui)
+void Renderer::render(ImGuiManager& imgui)
 {
     if (!initialized)
         return;
@@ -325,6 +352,9 @@ void Renderer::render(ImGuiManager &imgui)
             "Failed to acquire swapchain image."
         );
     }
+
+    VkSemaphore renderFinishedSemaphore =
+        renderFinishedSemaphores[imageIndex];
 
     vkResetFences(
         vkContext->device,
@@ -433,10 +463,17 @@ void Renderer::render(ImGuiManager &imgui)
 
     viewport.x = 0.0f;
     viewport.y = 0.0f;
+
     viewport.width =
-        static_cast<float>(swapchain.extent.width);
+        static_cast<float>(
+            swapchain.extent.width
+        );
+
     viewport.height =
-        static_cast<float>(swapchain.extent.height);
+        static_cast<float>(
+            swapchain.extent.height
+        );
+
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
@@ -465,10 +502,14 @@ void Renderer::render(ImGuiManager &imgui)
     ParticleRenderPushConstant push{};
 
     push.width =
-        static_cast<float>(swapchain.extent.width);
+        static_cast<float>(
+            swapchain.extent.width
+        );
 
     push.height =
-        static_cast<float>(swapchain.extent.height);
+        static_cast<float>(
+            swapchain.extent.height
+        );
 
     vkCmdPushConstants(
         commandBuffer,
@@ -519,7 +560,8 @@ void Renderer::render(ImGuiManager &imgui)
     submitInfo.sType =
         VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.waitSemaphoreCount =
+        1;
 
     submitInfo.pWaitSemaphores =
         &frame.imageAvailableSemaphore;
@@ -527,15 +569,17 @@ void Renderer::render(ImGuiManager &imgui)
     submitInfo.pWaitDstStageMask =
         &waitStage;
 
-    submitInfo.commandBufferCount = 1;
+    submitInfo.commandBufferCount =
+        1;
 
     submitInfo.pCommandBuffers =
         &commandBuffer;
 
-    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.signalSemaphoreCount =
+        1;
 
     submitInfo.pSignalSemaphores =
-        &frame.renderFinishedSemaphore;
+        &renderFinishedSemaphore;
 
     result =
         vkQueueSubmit(
@@ -557,12 +601,14 @@ void Renderer::render(ImGuiManager &imgui)
     presentInfo.sType =
         VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
-    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.waitSemaphoreCount =
+        1;
 
     presentInfo.pWaitSemaphores =
-        &frame.renderFinishedSemaphore;
+        &renderFinishedSemaphore;
 
-    presentInfo.swapchainCount = 1;
+    presentInfo.swapchainCount =
+        1;
 
     presentInfo.pSwapchains =
         &swapchain.handle;
@@ -642,6 +688,21 @@ void Renderer::destroy()
     }
 
     frames.clear();
+
+    for (VkSemaphore semaphore :
+         renderFinishedSemaphores)
+    {
+        if (semaphore != VK_NULL_HANDLE)
+        {
+            vkDestroySemaphore(
+                vkContext->device,
+                semaphore,
+                nullptr
+            );
+        }
+    }
+
+    renderFinishedSemaphores.clear();
 
     swapchain.destroy(
         vkContext->device

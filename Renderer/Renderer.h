@@ -24,6 +24,7 @@ class Renderer
 {
 public:
     VkFormat getSwapchainFormat() const;
+    std::vector<VkSemaphore> renderFinishedSemaphores;
     static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
     Renderer() = default;
