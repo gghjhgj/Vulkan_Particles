@@ -213,4 +213,22 @@ void Config::load(const std::string& path)
             "particles",
             "count"
         );
+    particles.trail_length =
+        get<float>(
+            ini,
+            "particles",
+            "trail_length"
+        );
+    particles.trail_width =
+        get<float>(
+            ini,
+            "particles",
+            "trail_width"
+        );
+    particles.size =
+        get<float>(
+            ini,
+            "particles",
+            "size"
+        );
 }

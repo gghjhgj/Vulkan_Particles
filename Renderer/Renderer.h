@@ -6,7 +6,7 @@
 #include "VK/VulkanImageUtils.h"
 #include "VK/VulkanGraphicsPipeline.h"
 #include "VK/VulkanBuffer.h"
-
+#include "../Config/Config.h"
 #include <SFML/Window.hpp>
 
 #include <vector>
@@ -18,6 +18,10 @@ struct ParticleRenderPushConstant
 {
     float width;
     float height;
+
+    float size;
+    float trail_length;
+    float trail_width;
 };
 
 class Renderer

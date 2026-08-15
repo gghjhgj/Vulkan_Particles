@@ -127,65 +127,157 @@ void VulkanContext::pickPhysicalDevice()
     }
 }
 
-void VulkanContext::createLogicalDevice(VkSurfaceKHR surface) 
+void VulkanContext::createLogicalDevice(VkSurfaceKHR surface)
 {
     uint32_t queueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+
+    vkGetPhysicalDeviceQueueFamilyProperties(
+        physicalDevice,
+        &queueFamilyCount,
+        nullptr
+    );
+
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
+
+    vkGetPhysicalDeviceQueueFamilyProperties(
+        physicalDevice,
+        &queueFamilyCount,
+        queueFamilies.data()
+    );
 
     bool foundGraphics = false;
     bool foundCompute = false;
 
-    for(uint32_t i = 0; i < queueFamilyCount; i++)
+    for (uint32_t i = 0; i < queueFamilyCount; i++)
     {
         VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &presentSupport);
-        if ((queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) && presentSupport) {
+
+        vkGetPhysicalDeviceSurfaceSupportKHR(
+            physicalDevice,
+            i,
+            surface,
+            &presentSupport
+        );
+
+        if ((queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
+            presentSupport)
+        {
             graphicsQueueFamilyIndex = i;
             foundGraphics = true;
         }
-        if (queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
+
+        if (queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT)
+        {
             computeQueueFamilyIndex = i;
             foundCompute = true;
         }
-        if (foundGraphics && foundCompute) break;
+
+        if (foundGraphics && foundCompute)
+            break;
     }
 
-    if (!foundGraphics || !foundCompute) throw std::runtime_error("Could not find queues.");
+    if (!foundGraphics || !foundCompute)
+        throw std::runtime_error("Could not find queues.");
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-    std::vector<uint32_t> uniqueQueueFamilies = { graphicsQueueFamilyIndex };
-    if (graphicsQueueFamilyIndex != computeQueueFamilyIndex) uniqueQueueFamilies.push_back(computeQueueFamilyIndex);
+
+    std::vector<uint32_t> uniqueQueueFamilies =
+    {
+        graphicsQueueFamilyIndex
+    };
+
+    if (graphicsQueueFamilyIndex != computeQueueFamilyIndex)
+        uniqueQueueFamilies.push_back(computeQueueFamilyIndex);
 
     float queuePriority = 1.0f;
-    for (uint32_t queueFamily : uniqueQueueFamilies) {
+
+    for (uint32_t queueFamily : uniqueQueueFamilies)
+    {
         VkDeviceQueueCreateInfo queueCreateInfo{};
-        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueCreateInfo.queueFamilyIndex = queueFamily;
+
+        queueCreateInfo.sType =
+            VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+
+        queueCreateInfo.queueFamilyIndex =
+            queueFamily;
+
         queueCreateInfo.queueCount = 1;
-        queueCreateInfo.pQueuePriorities = &queuePriority;
+
+        queueCreateInfo.pQueuePriorities =
+            &queuePriority;
+
         queueCreateInfos.push_back(queueCreateInfo);
     }
 
-    const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+    const std::vector<const char*> deviceExtensions =
+    {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    };
+
+    VkPhysicalDeviceFeatures deviceFeatures{};
+
+    deviceFeatures.largePoints = VK_TRUE;
+
     VkPhysicalDeviceVulkan13Features vulkan13Features{};
-    vulkan13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-    vulkan13Features.dynamicRendering = VK_TRUE;
+
+    vulkan13Features.sType =
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+
+    vulkan13Features.dynamicRendering =
+        VK_TRUE;
 
     VkDeviceCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    createInfo.pNext = &vulkan13Features;
-    createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-    createInfo.pQueueCreateInfos = queueCreateInfos.data();
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
-    createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-    if(vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS)
-        throw std::runtime_error("couldn't create logicDevice");
+    createInfo.sType =
+        VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 
-    vkGetDeviceQueue(device, graphicsQueueFamilyIndex, 0, &graphicsQueue);
-    vkGetDeviceQueue(device, computeQueueFamilyIndex, 0, &computeQueue);
+    createInfo.pNext =
+        &vulkan13Features;
+
+    createInfo.pEnabledFeatures =
+        &deviceFeatures;
+
+    createInfo.queueCreateInfoCount =
+        static_cast<uint32_t>(
+            queueCreateInfos.size()
+        );
+
+    createInfo.pQueueCreateInfos =
+        queueCreateInfos.data();
+
+    createInfo.enabledExtensionCount =
+        static_cast<uint32_t>(
+            deviceExtensions.size()
+        );
+
+    createInfo.ppEnabledExtensionNames =
+        deviceExtensions.data();
+
+    if (vkCreateDevice(
+            physicalDevice,
+            &createInfo,
+            nullptr,
+            &device
+        ) != VK_SUCCESS)
+    {
+        throw std::runtime_error(
+            "couldn't create logicDevice"
+        );
+    }
+
+    vkGetDeviceQueue(
+        device,
+        graphicsQueueFamilyIndex,
+        0,
+        &graphicsQueue
+    );
+
+    vkGetDeviceQueue(
+        device,
+        computeQueueFamilyIndex,
+        0,
+        &computeQueue
+    );
 }
 
 uint32_t VulkanContext::findMemoryType(

@@ -88,10 +88,6 @@ if(NOT SFML_FOUND)
 
     FetchContent_MakeAvailable(SFML)
 
-    message(STATUS
-        "SFML downloaded and configured."
-    )
-
 else()
 
     message(STATUS "SFML found.")
@@ -117,10 +113,7 @@ if(NOT Vulkan_FOUND)
         "VULKAN SDK NOT FOUND\n"
         "============================================================\n"
         "\n"
-        "Install the Vulkan SDK from LunarG:\n"
-        "https://vulkan.lunarg.com/\n"
-        "\n"
-        "After installation, restart your terminal / IDE.\n"
+        "Install the Vulkan SDK from LunarG.\n"
         "\n"
     )
 
@@ -143,15 +136,13 @@ find_program(GLSLC_EXECUTABLE
     NAMES glslc glslc.exe
 )
 
-# Try Vulkan SDK directly if glslc is not in PATH.
 if(NOT GLSLC_EXECUTABLE AND DEFINED ENV{VULKAN_SDK})
 
     if(WIN32)
 
         find_program(GLSLC_EXECUTABLE
             NAMES glslc.exe
-            PATHS
-                "$ENV{VULKAN_SDK}/Bin"
+            PATHS "$ENV{VULKAN_SDK}/Bin"
             NO_DEFAULT_PATH
         )
 
@@ -159,8 +150,7 @@ if(NOT GLSLC_EXECUTABLE AND DEFINED ENV{VULKAN_SDK})
 
         find_program(GLSLC_EXECUTABLE
             NAMES glslc
-            PATHS
-                "$ENV{VULKAN_SDK}/bin"
+            PATHS "$ENV{VULKAN_SDK}/bin"
             NO_DEFAULT_PATH
         )
 
@@ -197,7 +187,6 @@ if(USE_DEAR_IMGUI)
     message(STATUS "Checking Dear ImGui")
     message(STATUS "================================================")
 
-    # Try an already installed package first.
     find_package(imgui QUIET)
 
     if(NOT imgui_FOUND)
@@ -215,10 +204,6 @@ if(USE_DEAR_IMGUI)
 
         FetchContent_MakeAvailable(imgui_src)
 
-        # ------------------------------------------------------------
-        # Dear ImGui core
-        # ------------------------------------------------------------
-
         if(NOT TARGET imgui)
 
             add_library(imgui STATIC
@@ -234,10 +219,6 @@ if(USE_DEAR_IMGUI)
             )
 
         endif()
-
-        # ------------------------------------------------------------
-        # Dear ImGui Vulkan backend
-        # ------------------------------------------------------------
 
         if(NOT TARGET imgui_vulkan)
 
@@ -306,13 +287,19 @@ if(USE_MIMALLOC)
         FetchContent_MakeAvailable(mimalloc)
 
         if(TARGET mimalloc-static)
+
             set(MIMALLOC_TARGET mimalloc-static)
+
         elseif(TARGET mimalloc)
+
             set(MIMALLOC_TARGET mimalloc)
+
         else()
+
             message(FATAL_ERROR
                 "mimalloc was downloaded but no usable target was created."
             )
+
         endif()
 
         message(STATUS
@@ -348,7 +335,6 @@ file(GLOB_RECURSE SOURCES
     "${PROJECT_SOURCE_DIR}/*.cpp"
 )
 
-# Exclude build/generated dependency directories.
 list(FILTER SOURCES
     EXCLUDE REGEX
     "[/\\\\]build[/\\\\]"
@@ -364,9 +350,11 @@ message(STATUS "Sources:")
 message(STATUS "------------------------------------------------")
 
 foreach(SOURCE ${SOURCES})
+
     message(STATUS
         "  ${SOURCE}"
     )
+
 endforeach()
 
 # ================================================================
@@ -503,7 +491,6 @@ if(BUILD_SHADERS)
 
     file(GLOB SHADER_SOURCES
         CONFIGURE_DEPENDS
-        "${PROJECT_SOURCE_DIR}/*.glsl"
         "${PROJECT_SOURCE_DIR}/shaders/*.glsl"
     )
 
@@ -518,11 +505,7 @@ if(BUILD_SHADERS)
         )
 
         # ------------------------------------------------------------
-        # Detect shader stage exactly like the Makefile.
-        #
-        # *_vert.glsl -> vertex
-        # *_frag.glsl -> fragment
-        # everything else -> compute
+        # Detect shader stage
         # ------------------------------------------------------------
 
         if(SHADER_NAME MATCHES "_vert\\.glsl$")
@@ -533,14 +516,23 @@ if(BUILD_SHADERS)
 
             set(SHADER_STAGE fragment)
 
+        elseif(SHADER_NAME MATCHES "_comp\\.glsl$")
+
+            set(SHADER_STAGE compute)
+
         else()
+
+            message(WARNING
+                "Unknown shader stage for ${SHADER_NAME}. "
+                "Assuming compute."
+            )
 
             set(SHADER_STAGE compute)
 
         endif()
 
         # ------------------------------------------------------------
-        # .glsl -> .spv
+        # Output filename
         # ------------------------------------------------------------
 
         string(
@@ -551,17 +543,35 @@ if(BUILD_SHADERS)
             "${SHADER_NAME}"
         )
 
-        set(SPV
+        # ------------------------------------------------------------
+        # BUILD output
+        # ------------------------------------------------------------
+
+        set(BUILD_SPV
             "${CMAKE_BINARY_DIR}/bin/shaders/${SHADER_OUTPUT_NAME}"
         )
 
         # ------------------------------------------------------------
-        # Compile
+        # SOURCE output
+        #
+        # Your C++ currently loads:
+        #
+        # shaders/particle_vert.spv
+        #
+        # so keep a copy there too.
+        # ------------------------------------------------------------
+
+        set(SOURCE_SPV
+            "${PROJECT_SOURCE_DIR}/shaders/${SHADER_OUTPUT_NAME}"
+        )
+
+        # ------------------------------------------------------------
+        # Compile GLSL -> SPIR-V
         # ------------------------------------------------------------
 
         add_custom_command(
             OUTPUT
-                "${SPV}"
+                "${BUILD_SPV}"
 
             COMMAND
                 ${CMAKE_COMMAND}
@@ -570,10 +580,16 @@ if(BUILD_SHADERS)
 
             COMMAND
                 "${GLSLC_EXECUTABLE}"
-                -fshader-stage=${SHADER_STAGE}
+                "-fshader-stage=${SHADER_STAGE}"
                 "${SHADER}"
-                -o
-                "${SPV}"
+                "-o"
+                "${BUILD_SPV}"
+
+            COMMAND
+                ${CMAKE_COMMAND}
+                -E copy_if_different
+                "${BUILD_SPV}"
+                "${SOURCE_SPV}"
 
             DEPENDS
                 "${SHADER}"
@@ -586,7 +602,7 @@ if(BUILD_SHADERS)
 
         list(APPEND
             SHADER_OUTPUTS
-            "${SPV}"
+            "${BUILD_SPV}"
         )
 
         message(STATUS
@@ -605,7 +621,7 @@ if(BUILD_SHADERS)
             ${SHADER_OUTPUTS}
     )
 
-    # App depends on compiled shaders.
+    # App waits for shaders.
     add_dependencies(app shader)
 
 endif()
@@ -621,10 +637,6 @@ set(GCC_PROFILE_DIR
 set(CLANG_PROFILE_DIR
     "${PROJECT_SOURCE_DIR}/profiles/clang"
 )
-
-# ------------------------------------------------
-# GCC PGO generation flags
-# ------------------------------------------------
 
 add_custom_target(gcc-pgo-generate
 
@@ -642,10 +654,6 @@ add_custom_target(gcc-pgo-generate
         "Preparing GCC PGO"
 )
 
-# ------------------------------------------------
-# GCC PGO profile-use information
-# ------------------------------------------------
-
 add_custom_target(gcc-pgo-use
 
     COMMAND
@@ -656,10 +664,6 @@ add_custom_target(gcc-pgo-use
     COMMENT
         "GCC PGO profile-use"
 )
-
-# ------------------------------------------------
-# Clang profile directory
-# ------------------------------------------------
 
 add_custom_target(clang-pgo-generate
 
@@ -735,4 +739,5 @@ message(STATUS
 message(STATUS
     "================================================"
 )
+
 message(STATUS "")

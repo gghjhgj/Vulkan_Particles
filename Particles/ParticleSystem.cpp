@@ -22,10 +22,12 @@ void ParticleSystem::init(
     std::uniform_real_distribution<float> distVelocity(-2.0f, 2.0f);
     std::uniform_int_distribution<uint32_t> distColor(0, 255);
 
+    int spawnX = width/2;
+    int spawnY = height/2;
     for (uint32_t i = 0; i < count; ++i)
     {
-        particles[i].x = static_cast<float>(i % width);
-        particles[i].y = static_cast<float>(i / width);
+        particles[i].x = spawnX;
+        particles[i].y = spawnY;
         particles[i].vx = distVelocity(gen);
         particles[i].vy = distVelocity(gen);
 

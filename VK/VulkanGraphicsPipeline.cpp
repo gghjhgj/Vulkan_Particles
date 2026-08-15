@@ -2,16 +2,14 @@
 
 #include "VulkanContext.h"
 
-
 void VulkanGraphicsPipeline::init(
-        const VulkanContext& context,
-        const std::string& vertexShaderPath,
-        const std::string& fragmentShaderPath,
-        VkPrimitiveTopology topology,
-        uint32_t pushConstantSize,
-        VkFormat colorAttachmentFormat,
-        const std::vector<VkDescriptorSetLayout>& descriptorLayouts
-    )
+    const VulkanContext &context,
+    const std::string &vertexShaderPath,
+    const std::string &fragmentShaderPath,
+    VkPrimitiveTopology topology,
+    uint32_t pushConstantSize,
+    VkFormat colorAttachmentFormat,
+    const std::vector<VkDescriptorSetLayout> &descriptorLayouts)
 {
     auto vertCode = readFile(vertexShaderPath);
     auto fragCode = readFile(fragmentShaderPath);
@@ -29,11 +27,11 @@ void VulkanGraphicsPipeline::init(
     shaderStages[0].pName = "main";
     shaderStages[0].pSpecializationInfo = nullptr;
 
-    shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO; 
+    shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shaderStages[1].pNext = nullptr;
     shaderStages[1].flags = 0;
     shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    shaderStages[1].module = fragModule;            
+    shaderStages[1].module = fragModule;
     shaderStages[1].pName = "main";
     shaderStages[1].pSpecializationInfo = nullptr;
 
@@ -47,7 +45,7 @@ void VulkanGraphicsPipeline::init(
     inputAssembly.topology = topology;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-    std::vector<VkDynamicState> dynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    std::vector<VkDynamicState> dynamicStates = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
@@ -64,7 +62,7 @@ void VulkanGraphicsPipeline::init(
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
     rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -74,8 +72,21 @@ void VulkanGraphicsPipeline::init(
     multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    colorBlendAttachment.blendEnable = VK_FALSE;
+    colorBlendAttachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT |
+        VK_COLOR_COMPONENT_G_BIT |
+        VK_COLOR_COMPONENT_B_BIT |
+        VK_COLOR_COMPONENT_A_BIT;
+
+    colorBlendAttachment.blendEnable = VK_TRUE;
+
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
     VkPipelineColorBlendStateCreateInfo colorBlending{};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -89,7 +100,8 @@ void VulkanGraphicsPipeline::init(
     pipelineLayoutInfo.pSetLayouts = descriptorLayouts.data();
 
     VkPushConstantRange pushConstantRange{};
-    if (pushConstantSize > 0) {
+    if (pushConstantSize > 0)
+    {
         pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
         pushConstantRange.offset = 0;
         pushConstantRange.size = pushConstantSize;
@@ -97,7 +109,8 @@ void VulkanGraphicsPipeline::init(
         pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
     }
 
-    if (vkCreatePipelineLayout(context.device, &pipelineLayoutInfo, nullptr, &layout) != VK_SUCCESS) {
+    if (vkCreatePipelineLayout(context.device, &pipelineLayoutInfo, nullptr, &layout) != VK_SUCCESS)
+    {
         throw std::runtime_error("Renderer Error: Failed to create VkPipelineLayout.");
     }
 
@@ -122,7 +135,8 @@ void VulkanGraphicsPipeline::init(
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
 
-    if (vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &handle) != VK_SUCCESS) {
+    if (vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &handle) != VK_SUCCESS)
+    {
         throw std::runtime_error("Renderer Error: Failed to create VkPipeline.");
     }
 
@@ -130,10 +144,11 @@ void VulkanGraphicsPipeline::init(
     vkDestroyShaderModule(context.device, vertModule, nullptr);
 }
 
-std::vector<char> VulkanGraphicsPipeline::readFile(const std::string& filename)
+std::vector<char> VulkanGraphicsPipeline::readFile(const std::string &filename)
 {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
-    if (!file.is_open()) {
+    if (!file.is_open())
+    {
         throw std::runtime_error("Renderer Error: Failed to open file: " + filename);
     }
     size_t fileSize = (size_t)file.tellg();
@@ -144,15 +159,16 @@ std::vector<char> VulkanGraphicsPipeline::readFile(const std::string& filename)
     return buffer;
 }
 
-VkShaderModule VulkanGraphicsPipeline::createShaderModule(VkDevice device, const std::vector<char>& code)
+VkShaderModule VulkanGraphicsPipeline::createShaderModule(VkDevice device, const std::vector<char> &code)
 {
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = code.size();
-    createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+    createInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
 
     VkShaderModule module;
-    if (vkCreateShaderModule(device, &createInfo, nullptr, &module) != VK_SUCCESS) {
+    if (vkCreateShaderModule(device, &createInfo, nullptr, &module) != VK_SUCCESS)
+    {
         throw std::runtime_error("Renderer Error: Failed to create VkShaderModule.");
     }
     return module;
@@ -160,11 +176,13 @@ VkShaderModule VulkanGraphicsPipeline::createShaderModule(VkDevice device, const
 
 void VulkanGraphicsPipeline::destroy(VkDevice device)
 {
-    if (handle != VK_NULL_HANDLE) {
+    if (handle != VK_NULL_HANDLE)
+    {
         vkDestroyPipeline(device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
-    if (layout != VK_NULL_HANDLE) {
+    if (layout != VK_NULL_HANDLE)
+    {
         vkDestroyPipelineLayout(device, layout, nullptr);
         layout = VK_NULL_HANDLE;
     }

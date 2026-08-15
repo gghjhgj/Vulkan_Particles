@@ -6,8 +6,13 @@ struct Particle
 {
     float x;
     float y;
+
+    float prevX;
+    float prevY;
+
     float vx;
     float vy;
+
     uint color;
 };
 
@@ -81,7 +86,7 @@ vec2 flowField(float x, float y)
     float dC_dy = cosXY * 0.007;
 
     float dD_dx = -sinXD * 0.009;
-    float dD_dy =  sinXD * 0.009;
+    float dD_dy = sinXD * 0.009;
 
     float dFdx =
         dA_dx * 0.45 +
@@ -268,6 +273,9 @@ void main()
 
     p.vx *= speedScale;
     p.vy *= speedScale;
+
+    p.prevX = p.x;
+    p.prevY = p.y;
 
     p.x += p.vx;
     p.y += p.vy;

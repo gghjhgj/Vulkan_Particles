@@ -23,8 +23,8 @@ VkFormat Renderer::getSwapchainFormat() const
 }
 
 void Renderer::init(
-    VulkanContext& context,
-    sf::Window& window)
+    VulkanContext &context,
+    sf::Window &window)
 {
     if (initialized)
         return;
@@ -40,39 +40,35 @@ void Renderer::init(
     if (windowSize.x == 0 || windowSize.y == 0)
     {
         throw std::runtime_error(
-            "Window has zero size."
-        );
+            "Window has zero size.");
     }
 
     swapchain.init(
         *vkContext,
         surface,
         windowSize.x,
-        windowSize.y
-    );
+        windowSize.y);
 
     swapchainLayouts.resize(
         swapchain.images.size(),
-        VK_IMAGE_LAYOUT_UNDEFINED
-    );
+        VK_IMAGE_LAYOUT_UNDEFINED);
 
     frames.resize(MAX_FRAMES_IN_FLIGHT);
 
-    for (auto& frame : frames)
+    for (auto &frame : frames)
     {
         frame.init(*vkContext);
     }
 
     renderFinishedSemaphores.resize(
-        swapchain.images.size()
-    );
+        swapchain.images.size());
 
     VkSemaphoreCreateInfo semaphoreInfo{};
 
     semaphoreInfo.sType =
         VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-    for (auto& semaphore : renderFinishedSemaphores)
+    for (auto &semaphore : renderFinishedSemaphores)
     {
         if (vkCreateSemaphore(
                 vkContext->device,
@@ -81,8 +77,7 @@ void Renderer::init(
                 &semaphore) != VK_SUCCESS)
         {
             throw std::runtime_error(
-                "Failed to create render finished semaphore."
-            );
+                "Failed to create render finished semaphore.");
         }
     }
 
@@ -115,7 +110,7 @@ void Renderer::init(
         << '\n';
 }
 
-void Renderer::createSurface(sf::Window& window)
+void Renderer::createSurface(sf::Window &window)
 {
 #ifdef _WIN32
 
@@ -126,8 +121,7 @@ void Renderer::createSurface(sf::Window& window)
 
     surfaceCreateInfo.hwnd =
         reinterpret_cast<HWND>(
-            window.getNativeHandle()
-        );
+            window.getNativeHandle());
 
     surfaceCreateInfo.hinstance =
         GetModuleHandle(nullptr);
@@ -137,21 +131,18 @@ void Renderer::createSurface(sf::Window& window)
             vkContext->instance,
             &surfaceCreateInfo,
             nullptr,
-            &surface
-        );
+            &surface);
 
     if (result != VK_SUCCESS)
     {
         throw std::runtime_error(
-            "Failed to create Vulkan Win32 surface."
-        );
+            "Failed to create Vulkan Win32 surface.");
     }
 
 #else
 
     throw std::runtime_error(
-        "This renderer currently supports Windows only."
-    );
+        "This renderer currently supports Windows only.");
 
 #endif
 }
@@ -185,24 +176,21 @@ void Renderer::createParticlePipeline()
             &particleDescriptorSetLayout) != VK_SUCCESS)
     {
         throw std::runtime_error(
-            "Failed to create particle descriptor set layout."
-        );
+            "Failed to create particle descriptor set layout.");
     }
 
     std::vector<VkDescriptorSetLayout> layouts =
-    {
-        particleDescriptorSetLayout
-    };
+        {
+            particleDescriptorSetLayout};
 
     particleGraphicsPipeline.init(
         *vkContext,
         "shaders/particle_vert.spv",
         "shaders/particle_frag.spv",
-        VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
+        VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         sizeof(ParticleRenderPushConstant),
         swapchain.imageFormat,
-        layouts
-    );
+        layouts);
 }
 
 void Renderer::createParticleDescriptors()
@@ -230,8 +218,7 @@ void Renderer::createParticleDescriptors()
             &particleDescriptorPool) != VK_SUCCESS)
     {
         throw std::runtime_error(
-            "Failed to create particle descriptor pool."
-        );
+            "Failed to create particle descriptor pool.");
     }
 
     VkDescriptorSetAllocateInfo allocInfo{};
@@ -253,13 +240,12 @@ void Renderer::createParticleDescriptors()
             &particleDescriptorSet) != VK_SUCCESS)
     {
         throw std::runtime_error(
-            "Failed to allocate particle descriptor set."
-        );
+            "Failed to allocate particle descriptor set.");
     }
 }
 
 void Renderer::setParticleBuffer(
-    const VulkanBuffer& buffer,
+    const VulkanBuffer &buffer,
     uint32_t count)
 {
     particleBuffer = &buffer;
@@ -297,13 +283,12 @@ void Renderer::setParticleBuffer(
         1,
         &write,
         0,
-        nullptr
-    );
+        nullptr);
 
     particlesConfigured = true;
 }
 
-void Renderer::render(ImGuiManager& imgui)
+void Renderer::render(ImGuiManager &imgui)
 {
     if (!initialized)
         return;
@@ -311,7 +296,7 @@ void Renderer::render(ImGuiManager& imgui)
     if (!particlesConfigured)
         return;
 
-    VulkanFrameData& frame =
+    VulkanFrameData &frame =
         frames[currentFrame];
 
     VkResult result =
@@ -320,14 +305,12 @@ void Renderer::render(ImGuiManager& imgui)
             1,
             &frame.inFlightFence,
             VK_TRUE,
-            UINT64_MAX
-        );
+            UINT64_MAX);
 
     if (result != VK_SUCCESS)
     {
         throw std::runtime_error(
-            "Failed to wait for frame fence."
-        );
+            "Failed to wait for frame fence.");
     }
 
     uint32_t imageIndex = 0;
@@ -339,8 +322,7 @@ void Renderer::render(ImGuiManager& imgui)
             UINT64_MAX,
             frame.imageAvailableSemaphore,
             VK_NULL_HANDLE,
-            &imageIndex
-        );
+            &imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
         return;
@@ -349,8 +331,7 @@ void Renderer::render(ImGuiManager& imgui)
         result != VK_SUBOPTIMAL_KHR)
     {
         throw std::runtime_error(
-            "Failed to acquire swapchain image."
-        );
+            "Failed to acquire swapchain image.");
     }
 
     VkSemaphore renderFinishedSemaphore =
@@ -359,16 +340,14 @@ void Renderer::render(ImGuiManager& imgui)
     vkResetFences(
         vkContext->device,
         1,
-        &frame.inFlightFence
-    );
+        &frame.inFlightFence);
 
     VkCommandBuffer commandBuffer =
         frame.commandBuffer;
 
     vkResetCommandBuffer(
         commandBuffer,
-        0
-    );
+        0);
 
     VkCommandBufferBeginInfo beginInfo{};
 
@@ -383,16 +362,14 @@ void Renderer::render(ImGuiManager& imgui)
             &beginInfo) != VK_SUCCESS)
     {
         throw std::runtime_error(
-            "Failed to begin command buffer."
-        );
+            "Failed to begin command buffer.");
     }
 
     VulkanImageUtils::transitionImageLayout(
         commandBuffer,
         swapchain.images[imageIndex],
         swapchainLayouts[imageIndex],
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-    );
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     swapchainLayouts[imageIndex] =
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -439,14 +416,12 @@ void Renderer::render(ImGuiManager& imgui)
 
     vkCmdBeginRendering(
         commandBuffer,
-        &renderingInfo
-    );
+        &renderingInfo);
 
     vkCmdBindPipeline(
         commandBuffer,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
-        particleGraphicsPipeline.handle
-    );
+        particleGraphicsPipeline.handle);
 
     vkCmdBindDescriptorSets(
         commandBuffer,
@@ -456,8 +431,7 @@ void Renderer::render(ImGuiManager& imgui)
         1,
         &particleDescriptorSet,
         0,
-        nullptr
-    );
+        nullptr);
 
     VkViewport viewport{};
 
@@ -466,13 +440,11 @@ void Renderer::render(ImGuiManager& imgui)
 
     viewport.width =
         static_cast<float>(
-            swapchain.extent.width
-        );
+            swapchain.extent.width);
 
     viewport.height =
         static_cast<float>(
-            swapchain.extent.height
-        );
+            swapchain.extent.height);
 
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
@@ -481,8 +453,7 @@ void Renderer::render(ImGuiManager& imgui)
         commandBuffer,
         0,
         1,
-        &viewport
-    );
+        &viewport);
 
     VkRect2D scissor{};
 
@@ -496,51 +467,52 @@ void Renderer::render(ImGuiManager& imgui)
         commandBuffer,
         0,
         1,
-        &scissor
-    );
+        &scissor);
 
     ParticleRenderPushConstant push{};
 
     push.width =
         static_cast<float>(
-            swapchain.extent.width
-        );
+            swapchain.extent.width);
 
     push.height =
         static_cast<float>(
-            swapchain.extent.height
-        );
+            swapchain.extent.height);
 
+    push.size =
+        Config::particles.size;
+
+    push.trail_length =
+        Config::particles.trail_length;
+
+    push.trail_width =
+        Config::particles.trail_width;
     vkCmdPushConstants(
         commandBuffer,
         particleGraphicsPipeline.layout,
         VK_SHADER_STAGE_VERTEX_BIT |
-        VK_SHADER_STAGE_FRAGMENT_BIT,
+            VK_SHADER_STAGE_FRAGMENT_BIT,
         0,
         sizeof(ParticleRenderPushConstant),
-        &push
-    );
+        &push);
 
     vkCmdDraw(
         commandBuffer,
-        particleCount,
+        particleCount * 6,
         1,
         0,
-        0
-    );
+        0);
 
     imgui.render(commandBuffer);
 
     vkCmdEndRendering(
-        commandBuffer
-    );
+        commandBuffer);
 
     VulkanImageUtils::transitionImageLayout(
         commandBuffer,
         swapchain.images[imageIndex],
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-    );
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     swapchainLayouts[imageIndex] =
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -548,8 +520,7 @@ void Renderer::render(ImGuiManager& imgui)
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
     {
         throw std::runtime_error(
-            "Failed to end command buffer."
-        );
+            "Failed to end command buffer.");
     }
 
     VkPipelineStageFlags waitStage =
@@ -586,14 +557,12 @@ void Renderer::render(ImGuiManager& imgui)
             vkContext->graphicsQueue,
             1,
             &submitInfo,
-            frame.inFlightFence
-        );
+            frame.inFlightFence);
 
     if (result != VK_SUCCESS)
     {
         throw std::runtime_error(
-            "Failed to submit graphics command buffer."
-        );
+            "Failed to submit graphics command buffer.");
     }
 
     VkPresentInfoKHR presentInfo{};
@@ -619,8 +588,7 @@ void Renderer::render(ImGuiManager& imgui)
     result =
         vkQueuePresentKHR(
             vkContext->graphicsQueue,
-            &presentInfo
-        );
+            &presentInfo);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR ||
         result == VK_SUBOPTIMAL_KHR)
@@ -631,13 +599,11 @@ void Renderer::render(ImGuiManager& imgui)
     if (result != VK_SUCCESS)
     {
         throw std::runtime_error(
-            "Failed to present swapchain image."
-        );
+            "Failed to present swapchain image.");
     }
 
     currentFrame =
-        (currentFrame + 1)
-        % MAX_FRAMES_IN_FLIGHT;
+        (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void Renderer::destroy()
@@ -649,20 +615,17 @@ void Renderer::destroy()
         return;
 
     vkDeviceWaitIdle(
-        vkContext->device
-    );
+        vkContext->device);
 
     particleGraphicsPipeline.destroy(
-        vkContext->device
-    );
+        vkContext->device);
 
     if (particleDescriptorPool != VK_NULL_HANDLE)
     {
         vkDestroyDescriptorPool(
             vkContext->device,
             particleDescriptorPool,
-            nullptr
-        );
+            nullptr);
 
         particleDescriptorPool =
             VK_NULL_HANDLE;
@@ -673,18 +636,16 @@ void Renderer::destroy()
         vkDestroyDescriptorSetLayout(
             vkContext->device,
             particleDescriptorSetLayout,
-            nullptr
-        );
+            nullptr);
 
         particleDescriptorSetLayout =
             VK_NULL_HANDLE;
     }
 
-    for (auto& frame : frames)
+    for (auto &frame : frames)
     {
         frame.destroy(
-            vkContext->device
-        );
+            vkContext->device);
     }
 
     frames.clear();
@@ -697,24 +658,21 @@ void Renderer::destroy()
             vkDestroySemaphore(
                 vkContext->device,
                 semaphore,
-                nullptr
-            );
+                nullptr);
         }
     }
 
     renderFinishedSemaphores.clear();
 
     swapchain.destroy(
-        vkContext->device
-    );
+        vkContext->device);
 
     if (surface != VK_NULL_HANDLE)
     {
         vkDestroySurfaceKHR(
             vkContext->instance,
             surface,
-            nullptr
-        );
+            nullptr);
 
         surface =
             VK_NULL_HANDLE;

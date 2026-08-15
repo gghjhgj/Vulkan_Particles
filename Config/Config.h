@@ -12,6 +12,9 @@ struct WindowConfig
 struct ParticlesConfig
 {
     uint32_t count;
+    float trail_length;
+    float trail_width;
+    float size;
 };
 
 class Config
