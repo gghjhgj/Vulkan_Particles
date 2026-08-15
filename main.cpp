@@ -1,0 +1,101 @@
+#include "Renderer/Renderer.h"
+#include "Particles/ParticleSystem.h"
+
+#include <SFML/Window.hpp>
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_win32.h>
+
+#include <iostream>
+#include <stdexcept>
+#include <vector>
+
+int main()
+{
+    try
+    {
+        sf::Window window(
+            sf::VideoMode({1280, 720}),
+            "Particle Simulation",
+            sf::Style::Default,
+            sf::State::Windowed);
+
+        std::vector<const char *> extensions =
+            {
+                VK_KHR_SURFACE_EXTENSION_NAME,
+
+#ifdef _WIN32
+                VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+#endif
+            };
+
+        VulkanContext vulkanContext;
+
+        vulkanContext.initInstance(
+            extensions);
+
+        Renderer renderer;
+
+        renderer.init(
+            vulkanContext,
+            window);
+
+        ParticleSystem particles;
+
+        particles.init(vulkanContext, 1000000, 1280, 720);
+
+        renderer.setParticleBuffer(
+            particles.getBuffer(),
+            particles.getCount());
+
+        bool running = true;
+
+        while (running)
+        {
+            while (const std::optional event = window.pollEvent())
+            {
+                if (event->is<sf::Event::Closed>())
+                {
+                    running = false;
+                }
+
+                if (const auto *resized = event->getIf<sf::Event::Resized>())
+                {
+                    (void)resized;
+                }
+            }
+
+            sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+            
+            float mouseX = static_cast<float>(mousePos.x);
+            float mouseY = static_cast<float>(mousePos.y);
+
+            particles.update(vulkanContext, mouseX, mouseY);
+
+            renderer.render();
+        }
+
+        vkDeviceWaitIdle(vulkanContext.device);
+    
+        particles.destroy(
+            vulkanContext.device);
+
+        renderer.destroy();
+
+        vulkanContext.destroy();
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr
+            << "FATAL ERROR: "
+            << e.what()
+            << '\n';
+
+        return 1;
+    }
+
+    return 0;
+}
