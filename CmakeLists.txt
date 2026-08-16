@@ -44,6 +44,11 @@ option(USE_DEAR_IMGUI
     ON
 )
 
+option(USE_WASAPI
+    "Enable Windows WASAPI audio capture"
+    ON
+)
+
 # ================================================================
 # DEPENDENCIES
 # ================================================================
@@ -327,6 +332,41 @@ if(USE_MIMALLOC)
 endif()
 
 # ================================================================
+# WASAPI
+# ================================================================
+
+if(USE_WASAPI)
+
+    if(WIN32)
+
+        message(STATUS "")
+        message(STATUS "================================================")
+        message(STATUS "Checking Windows WASAPI")
+        message(STATUS "================================================")
+
+        message(STATUS
+            "WASAPI audio capture: ENABLED"
+        )
+
+        set(WASAPI_LIBRARIES
+            ole32
+            avrt
+        )
+
+    else()
+
+        message(WARNING
+            "USE_WASAPI is ON, but the current platform is not Windows."
+            " WASAPI will be disabled."
+        )
+
+        set(USE_WASAPI OFF)
+
+    endif()
+
+endif()
+
+# ================================================================
 # SOURCE FILES
 # ================================================================
 
@@ -390,6 +430,19 @@ target_link_libraries(app
         SFML::System
         Vulkan::Vulkan
 )
+
+# ================================================================
+# WASAPI LINKING
+# ================================================================
+
+if(USE_WASAPI AND WIN32)
+
+    target_link_libraries(app
+        PRIVATE
+            ${WASAPI_LIBRARIES}
+    )
+
+endif()
 
 # ================================================================
 # MIMALLOC
@@ -553,12 +606,6 @@ if(BUILD_SHADERS)
 
         # ------------------------------------------------------------
         # SOURCE output
-        #
-        # Your C++ currently loads:
-        #
-        # shaders/particle_vert.spv
-        #
-        # so keep a copy there too.
         # ------------------------------------------------------------
 
         set(SOURCE_SPV
@@ -621,7 +668,6 @@ if(BUILD_SHADERS)
             ${SHADER_OUTPUTS}
     )
 
-    # App waits for shaders.
     add_dependencies(app shader)
 
 endif()
@@ -730,6 +776,10 @@ message(STATUS
 
 message(STATUS
     "mimalloc:       ${USE_MIMALLOC}"
+)
+
+message(STATUS
+    "WASAPI:         ${USE_WASAPI}"
 )
 
 message(STATUS
