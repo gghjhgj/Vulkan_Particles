@@ -8,50 +8,66 @@
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
-    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void* pUserData) {
+    const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+    void *pUserData)
+{
     std::cerr << "[Validation Layer]: " << pCallbackData->pMessage << std::endl;
     return VK_FALSE;
 }
 
-VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
-    auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-    if (func != nullptr) return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo, const VkAllocationCallbacks *pAllocator, VkDebugUtilsMessengerEXT *pDebugMessenger)
+{
+    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    if (func != nullptr)
+        return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
     return VK_ERROR_EXTENSION_NOT_PRESENT;
 }
 
-void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
-    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-    if (func != nullptr) func(instance, debugMessenger, pAllocator);
+void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks *pAllocator)
+{
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (func != nullptr)
+        func(instance, debugMessenger, pAllocator);
 }
 #endif
 
-void VulkanContext::initInstance(const std::vector<const char*>& instanceExtensions) {
+void VulkanContext::initInstance(const std::vector<const char *> &instanceExtensions)
+{
     createInstance(instanceExtensions);
     pickPhysicalDevice();
 }
 
-void VulkanContext::initDevice(VkSurfaceKHR surface) {
+void VulkanContext::initDevice(VkSurfaceKHR surface)
+{
     createLogicalDevice(surface);
 }
 
-void VulkanContext::destroy() {
+void VulkanContext::destroy()
+{
 #ifdef ENABLE_VALIDATION_LAYERS
-    if (instance != VK_NULL_HANDLE && debugMessenger != VK_NULL_HANDLE) {
+    if (instance != VK_NULL_HANDLE && debugMessenger != VK_NULL_HANDLE)
+    {
         DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
     }
 #endif
-    if (device != VK_NULL_HANDLE) {
+    if (timestampQueryPool != VK_NULL_HANDLE)
+    {
+        vkDestroyQueryPool(device, timestampQueryPool, nullptr);
+        timestampQueryPool = VK_NULL_HANDLE;
+    }
+    if (device != VK_NULL_HANDLE)
+    {
         vkDestroyDevice(device, nullptr);
         device = VK_NULL_HANDLE;
     }
-    if (instance != VK_NULL_HANDLE) {
+    if (instance != VK_NULL_HANDLE)
+    {
         vkDestroyInstance(instance, nullptr);
         instance = VK_NULL_HANDLE;
     }
 }
 
-void VulkanContext::createInstance(const std::vector<const char*>& instanceExtensions) 
+void VulkanContext::createInstance(const std::vector<const char *> &instanceExtensions)
 {
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -61,7 +77,7 @@ void VulkanContext::createInstance(const std::vector<const char*>& instanceExten
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.apiVersion = VK_API_VERSION_1_3;
 
-    std::vector<const char*> extensions = instanceExtensions;
+    std::vector<const char *> extensions = instanceExtensions;
 #ifdef ENABLE_VALIDATION_LAYERS
     extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
@@ -73,14 +89,14 @@ void VulkanContext::createInstance(const std::vector<const char*>& instanceExten
     createInfo.ppEnabledExtensionNames = extensions.data();
 
 #ifdef ENABLE_VALIDATION_LAYERS
-    const std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };
+    const std::vector<const char *> validationLayers = {"VK_LAYER_KHRONOS_validation"};
     createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
     createInfo.ppEnabledLayerNames = validationLayers.data();
 #else
     createInfo.enabledLayerCount = 0;
 #endif
 
-    if(vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS)
+    if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS)
     {
         throw std::runtime_error("Vulkan instance create crashed");
     }
@@ -92,7 +108,8 @@ void VulkanContext::createInstance(const std::vector<const char*>& instanceExten
     std::cout << "VK instance created with SFML window extensions." << std::endl;
 }
 
-void VulkanContext::setupDebugMessenger() {
+void VulkanContext::setupDebugMessenger()
+{
     VkDebugUtilsMessengerCreateInfoEXT createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
@@ -102,26 +119,29 @@ void VulkanContext::setupDebugMessenger() {
         throw std::runtime_error("failed to set up debug messenger!");
 }
 
-void VulkanContext::pickPhysicalDevice() 
+void VulkanContext::pickPhysicalDevice()
 {
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
-    if(deviceCount == 0) throw std::runtime_error("No graphics card");
+    if (deviceCount == 0)
+        throw std::runtime_error("No graphics card");
 
     std::vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 
-    for(const auto& dev : devices)
+    for (const auto &dev : devices)
     {
         VkPhysicalDeviceProperties deviceProperties;
         vkGetPhysicalDeviceProperties(dev, &deviceProperties);
-        if(deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
+        if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
+        {
             physicalDevice = dev;
             std::cout << "Integrated graphics card selected: " << deviceProperties.deviceName << std::endl;
             break;
         }
     }
-    if(physicalDevice == VK_NULL_HANDLE) {
+    if (physicalDevice == VK_NULL_HANDLE)
+    {
         physicalDevice = devices[0];
         std::cout << "No integrated card, selected fallback." << std::endl;
     }
@@ -134,16 +154,14 @@ void VulkanContext::createLogicalDevice(VkSurfaceKHR surface)
     vkGetPhysicalDeviceQueueFamilyProperties(
         physicalDevice,
         &queueFamilyCount,
-        nullptr
-    );
+        nullptr);
 
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
 
     vkGetPhysicalDeviceQueueFamilyProperties(
         physicalDevice,
         &queueFamilyCount,
-        queueFamilies.data()
-    );
+        queueFamilies.data());
 
     bool foundGraphics = false;
     bool foundCompute = false;
@@ -156,8 +174,7 @@ void VulkanContext::createLogicalDevice(VkSurfaceKHR surface)
             physicalDevice,
             i,
             surface,
-            &presentSupport
-        );
+            &presentSupport);
 
         if ((queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
             presentSupport)
@@ -182,9 +199,8 @@ void VulkanContext::createLogicalDevice(VkSurfaceKHR surface)
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 
     std::vector<uint32_t> uniqueQueueFamilies =
-    {
-        graphicsQueueFamilyIndex
-    };
+        {
+            graphicsQueueFamilyIndex};
 
     if (graphicsQueueFamilyIndex != computeQueueFamilyIndex)
         uniqueQueueFamilies.push_back(computeQueueFamilyIndex);
@@ -209,10 +225,9 @@ void VulkanContext::createLogicalDevice(VkSurfaceKHR surface)
         queueCreateInfos.push_back(queueCreateInfo);
     }
 
-    const std::vector<const char*> deviceExtensions =
-    {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME
-    };
+    const std::vector<const char *> deviceExtensions =
+        {
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
     VkPhysicalDeviceFeatures deviceFeatures{};
 
@@ -239,16 +254,14 @@ void VulkanContext::createLogicalDevice(VkSurfaceKHR surface)
 
     createInfo.queueCreateInfoCount =
         static_cast<uint32_t>(
-            queueCreateInfos.size()
-        );
+            queueCreateInfos.size());
 
     createInfo.pQueueCreateInfos =
         queueCreateInfos.data();
 
     createInfo.enabledExtensionCount =
         static_cast<uint32_t>(
-            deviceExtensions.size()
-        );
+            deviceExtensions.size());
 
     createInfo.ppEnabledExtensionNames =
         deviceExtensions.data();
@@ -257,27 +270,42 @@ void VulkanContext::createLogicalDevice(VkSurfaceKHR surface)
             physicalDevice,
             &createInfo,
             nullptr,
-            &device
-        ) != VK_SUCCESS)
+            &device) != VK_SUCCESS)
     {
         throw std::runtime_error(
-            "couldn't create logicDevice"
-        );
+            "couldn't create logicDevice");
+    }
+
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+    timestampPeriod = properties.limits.timestampPeriod;
+
+    VkQueryPoolCreateInfo queryPoolInfo{};
+    queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    queryPoolInfo.queryCount = 4;
+
+    if (vkCreateQueryPool(
+            device,
+            &queryPoolInfo,
+            nullptr,
+            &timestampQueryPool) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create timestamp query pool");
     }
 
     vkGetDeviceQueue(
         device,
         graphicsQueueFamilyIndex,
         0,
-        &graphicsQueue
-    );
+        &graphicsQueue);
 
     vkGetDeviceQueue(
         device,
         computeQueueFamilyIndex,
         0,
-        &computeQueue
-    );
+        &computeQueue);
 }
 
 uint32_t VulkanContext::findMemoryType(
@@ -290,12 +318,10 @@ uint32_t VulkanContext::findMemoryType(
         physicalDevice,
         &memProperties);
 
-
-    for(uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
     {
-        if((typeFilter & (1 << i)) &&
-           (memProperties.memoryTypes[i].propertyFlags & properties)
-              == properties)
+        if ((typeFilter & (1 << i)) &&
+            (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
         {
             return i;
         }

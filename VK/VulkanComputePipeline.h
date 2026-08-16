@@ -5,50 +5,81 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <stdexcept>
+#include <cstdint>
 
 class VulkanContext;
 class VulkanBuffer;
 
 class VulkanComputePipeline
 {
-    public:
-
-    VkPipeline pipeline = VK_NULL_HANDLE;
-    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-    VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
-    VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
-    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-    VkShaderModule shaderModule = VK_NULL_HANDLE;
-
+public:
     void init(
-        const VulkanContext& context, 
-        const std::string& shaderPath, 
-        uint32_t pushConstantSize, 
-        uint32_t workGroupSizeX = 0, 
-        uint32_t bindingCount = 1
+        const VulkanContext& context,
+        const std::string& shaderPath,
+        uint32_t pushConstantSize,
+        uint32_t workGroupSizeX,
+        uint32_t bindingCount
     );
 
     void bindBuffers(
-        const VulkanContext& context, 
+        const VulkanContext& context,
         const std::vector<VulkanBuffer>& buffers
     );
 
     void dispatch(
-        const VulkanContext& context, 
-        uint32_t groupCountX, 
-        uint32_t groupCountY = 1, 
-        uint32_t groupCountZ = 1,
-        const void* pushConstantData = nullptr,
-        uint32_t pushConstantSize = 0
+        const VulkanContext& context,
+        uint32_t groupCountX,
+        uint32_t groupCountY,
+        uint32_t groupCountZ,
+        const void* pushConstantData,
+        uint32_t pushConstantSize,
+        VkBuffer particleBuffer
     );
-    
+
     void destroy(VkDevice device);
 
+    VkSemaphore getFinishedSemaphore() const
+    {
+        return computeFinishedSemaphore;
+    }
 
-    private:
-    VkFence computeFence = VK_NULL_HANDLE;
-    VkCommandPool commandPool = VK_NULL_HANDLE;
-    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
-    std::vector<char> readFile(const std::string& filename);
-    VkShaderModule createShaderModule(VkDevice device, const std::vector<char>& code);
+private:
+    std::vector<char> readFile(
+        const std::string& filename);
+
+    VkShaderModule createShaderModule(
+        VkDevice device,
+        const std::vector<char>& code);
+
+private:
+    VkShaderModule shaderModule =
+        VK_NULL_HANDLE;
+
+    VkDescriptorSetLayout descriptorSetLayout =
+        VK_NULL_HANDLE;
+
+    VkPipelineLayout pipelineLayout =
+        VK_NULL_HANDLE;
+
+    VkPipeline pipeline =
+        VK_NULL_HANDLE;
+
+    VkDescriptorPool descriptorPool =
+        VK_NULL_HANDLE;
+
+    VkDescriptorSet descriptorSet =
+        VK_NULL_HANDLE;
+
+    VkCommandPool commandPool =
+        VK_NULL_HANDLE;
+
+    VkCommandBuffer commandBuffer =
+        VK_NULL_HANDLE;
+
+    VkFence computeFence =
+        VK_NULL_HANDLE;
+
+    VkSemaphore computeFinishedSemaphore =
+        VK_NULL_HANDLE;
 };

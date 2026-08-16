@@ -19,9 +19,14 @@ int main()
 {
     try
     {
-        Config::load("Config/config.ini");
+        Config::load(
+            "Config/config.ini");
+
         sf::Window window(
-            sf::VideoMode({Config::window.width, Config::window.height}),
+            sf::VideoMode({
+                Config::window.width,
+                Config::window.height
+            }),
             "Particle Simulation",
             sf::Style::Default,
             sf::State::Windowed
@@ -63,6 +68,10 @@ int main()
             particles.getCount()
         );
 
+        renderer.setComputeFinishedSemaphore(
+            particles.getComputeFinishedSemaphore()
+        );
+
         ImGuiManager imgui;
 
         imgui.init(
@@ -75,9 +84,11 @@ int main()
 
         while (running)
         {
-            while (const std::optional event = window.pollEvent())
+            while (const std::optional event =
+                       window.pollEvent())
             {
-                imgui.processEvent(*event);
+                imgui.processEvent(
+                    *event);
 
                 if (event->is<sf::Event::Closed>())
                 {
@@ -91,16 +102,20 @@ int main()
                 }
             }
 
-            imgui.newFrame(window);
+            imgui.newFrame(
+                window);
 
             sf::Vector2i mousePos =
-                sf::Mouse::getPosition(window);
+                sf::Mouse::getPosition(
+                    window);
 
             float mouseX =
-                static_cast<float>(mousePos.x);
+                static_cast<float>(
+                    mousePos.x);
 
             float mouseY =
-                static_cast<float>(mousePos.y);
+                static_cast<float>(
+                    mousePos.y);
 
             particles.update(
                 vulkanContext,
@@ -108,7 +123,8 @@ int main()
                 mouseY
             );
 
-            renderer.render(imgui);
+            renderer.render(
+                imgui);
         }
 
         vkDeviceWaitIdle(

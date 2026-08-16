@@ -43,6 +43,11 @@ public:
         return particleBuffer;
     }
 
+    VkSemaphore getComputeFinishedSemaphore() const
+    {
+        return computePipeline.getFinishedSemaphore();
+    }
+
 private:
     std::vector<Particle> particles;
 

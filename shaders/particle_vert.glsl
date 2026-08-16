@@ -1,96 +1,65 @@
 #version 450
 
-struct Particle
-{
-    float x;
-    float y;
-
-    float prevX;
-    float prevY;
-
-    float vx;
-    float vy;
-
-    uint color;
-};
+#include "common/particle.glsl"
+#include "common/particle_push.glsl"
 
 layout(set = 0, binding = 0) readonly buffer ParticleBuffer
 {
     Particle particles[];
 };
 
-layout(push_constant) uniform Push
-{
-    float width;
-    float height;
+layout(location = 0) flat out vec3 particleColor;
+layout(location = 1) out vec2 localPos;
+layout(location = 2) flat out vec4 trailData;
 
-    float size;
-    float trail_length;
-    float trail_width;
-} push;
-
-layout(location = 0) out vec3 particleColor;
-layout(location = 1) out float trailFactor;
+const vec2 POS_QUAD[6] = vec2[](
+    vec2(-1.0, -1.0),
+    vec2(-1.0,  1.0),
+    vec2( 1.0, -1.0),
+    vec2( 1.0, -1.0),
+    vec2(-1.0,  1.0),
+    vec2( 1.0,  1.0)
+);
 
 void main()
 {
-    uint particleId = gl_VertexIndex / 6;
-    uint vertexId = gl_VertexIndex % 6;
+    uint pId = gl_VertexIndex / 6u;
+    Particle p = particles[pId];
 
-    Particle p = particles[particleId];
+    vec2 pos = vec2(p.x, p.y);
+    vec2 move = pos - vec2(p.prevX, p.prevY);
 
-    vec2 position = vec2(p.x, p.y);
-    vec2 previous = vec2(p.prevX, p.prevY);
+    float mag = length(move);
+    vec2 dir = mag > 0.001 ? (move / mag) : vec2(0.0);
 
-    vec2 movement = position - previous;
-    float movementLength = length(movement);
+    float halfW = max(push.trail_width, push.size) * 0.5;
+    float minTrail = max(halfW * 8.0, push.size * 4.0);
 
-    vec2 direction;
+    float trail = clamp(mag * 16.0 + minTrail, minTrail, push.trail_length);
+    float L = max(trail / halfW, 8.0);
 
-    if (movementLength > 0.0001)
-        direction = movement / movementLength;
-    else
-        direction = vec2(1.0, 0.0);
+    uint v = gl_VertexIndex - pId * 6u;
+    vec2 q = POS_QUAD[v];
 
-    vec2 perpendicular = vec2(-direction.y, direction.x);
+    float x = q.x > 0.0 ? 1.5 : (-L - 1.5);
 
-    float halfWidth = push.trail_width * 0.5;
+    vec2 side = vec2(-dir.y, dir.x) * halfW;
+    vec2 finalPos = pos + dir * (halfW * x) + side * q.y;
 
-    float trailScale = clamp(
-        movementLength / max(push.trail_length, 0.0001),
-        0.15,
+    gl_Position = vec4(
+        finalPos * (2.0 / vec2(push.width, push.height)) - 1.0,
+        0.0,
         1.0
     );
 
-    vec2 tail = position - direction * push.trail_length * trailScale;
+    localPos = vec2(x, q.y);
 
-    vec2 positions[6] = vec2[](
-        tail - perpendicular * halfWidth,
-        tail + perpendicular * halfWidth,
-        position - perpendicular * halfWidth,
-
-        position - perpendicular * halfWidth,
-        tail + perpendicular * halfWidth,
-        position + perpendicular * halfWidth
+    trailData = vec4(
+        L,
+        halfW,
+        1.0 / L,
+        1.0 / max(halfW * 0.35, 0.75)
     );
 
-    float factors[6] = float[](
-        0.0, 0.0, 1.0,
-        1.0, 0.0, 1.0
-    );
-
-    vec2 finalPosition = positions[vertexId];
-
-    trailFactor = factors[vertexId];
-
-    float x = (finalPosition.x / push.width) * 2.0 - 1.0;
-    float y = (finalPosition.y / push.height) * 2.0 - 1.0;
-
-    gl_Position = vec4(x, y, 0.0, 1.0);
-
-    uint r = p.color & 0xFFu;
-    uint g = (p.color >> 8u) & 0xFFu;
-    uint b = (p.color >> 16u) & 0xFFu;
-
-    particleColor = vec3(r, g, b) / 255.0;
+    particleColor = unpackUnorm4x8(p.color).rgb;
 }

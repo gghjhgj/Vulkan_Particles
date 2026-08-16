@@ -22,8 +22,9 @@ void ParticleSystem::init(
     std::uniform_real_distribution<float> distVelocity(-2.0f, 2.0f);
     std::uniform_int_distribution<uint32_t> distColor(0, 255);
 
-    int spawnX = width/2;
-    int spawnY = height/2;
+    int spawnX = width / 2;
+    int spawnY = height / 2;
+
     for (uint32_t i = 0; i < count; ++i)
     {
         particles[i].x = spawnX;
@@ -70,15 +71,23 @@ void ParticleSystem::update(
     constexpr uint32_t WORKGROUP_SIZE = 256;
 
     uint32_t particleCount =
-        static_cast<uint32_t>(particles.size());
+        static_cast<uint32_t>(
+            particles.size());
 
     uint32_t groupCount =
-        (particleCount + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+        (particleCount + WORKGROUP_SIZE - 1) /
+        WORKGROUP_SIZE;
 
     ComputePush pushData{};
-    pushData.particleCount = particleCount;
-    pushData.mouseX = mouseX;
-    pushData.mouseY = mouseY;
+
+    pushData.particleCount =
+        particleCount;
+
+    pushData.mouseX =
+        mouseX;
+
+    pushData.mouseY =
+        mouseY;
 
     computePipeline.dispatch(
         context,
@@ -86,7 +95,8 @@ void ParticleSystem::update(
         1,
         1,
         &pushData,
-        sizeof(ComputePush));
+        sizeof(ComputePush),
+        particleBuffer.handle);
 }
 
 void ParticleSystem::destroy(VkDevice device)

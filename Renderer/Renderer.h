@@ -28,13 +28,18 @@ class Renderer
 {
 public:
     VkFormat getSwapchainFormat() const;
+
     std::vector<VkSemaphore> renderFinishedSemaphores;
+
     static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
     Renderer() = default;
     ~Renderer();
 
-    void init(VulkanContext& context, sf::Window& window);
+    void init(
+        VulkanContext& context,
+        sf::Window& window
+    );
 
     void setParticleBuffer(
         const VulkanBuffer& buffer,
@@ -44,6 +49,10 @@ public:
     void render(ImGuiManager& imgui);
 
     void destroy();
+
+    void setComputeFinishedSemaphore(
+        VkSemaphore semaphore
+    );
 
 private:
     void createSurface(sf::Window& window);
@@ -63,14 +72,11 @@ private:
 
     VulkanGraphicsPipeline particleGraphicsPipeline;
 
-    VkDescriptorSetLayout particleDescriptorSetLayout =
-        VK_NULL_HANDLE;
+    VkDescriptorSetLayout particleDescriptorSetLayout = VK_NULL_HANDLE;
 
-    VkDescriptorPool particleDescriptorPool =
-        VK_NULL_HANDLE;
+    VkDescriptorPool particleDescriptorPool = VK_NULL_HANDLE;
 
-    VkDescriptorSet particleDescriptorSet =
-        VK_NULL_HANDLE;
+    VkDescriptorSet particleDescriptorSet = VK_NULL_HANDLE;
 
     const VulkanBuffer* particleBuffer = nullptr;
 
@@ -80,4 +86,6 @@ private:
 
     bool initialized = false;
     bool particlesConfigured = false;
+
+    VkSemaphore computeFinishedSemaphore = VK_NULL_HANDLE;
 };

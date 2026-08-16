@@ -22,6 +22,12 @@ VkFormat Renderer::getSwapchainFormat() const
     return swapchain.imageFormat;
 }
 
+void Renderer::setComputeFinishedSemaphore(
+    VkSemaphore semaphore)
+{
+    computeFinishedSemaphore = semaphore;
+}
+
 void Renderer::init(
     VulkanContext &context,
     sf::Window &window)
@@ -257,7 +263,9 @@ void Renderer::setParticleBuffer(
         buffer.handle;
 
     bufferInfo.offset = 0;
-    bufferInfo.range = buffer.size;
+
+    bufferInfo.range =
+        buffer.size;
 
     VkWriteDescriptorSet write{};
 
@@ -294,6 +302,9 @@ void Renderer::render(ImGuiManager &imgui)
         return;
 
     if (!particlesConfigured)
+        return;
+
+    if (particleBuffer == nullptr)
         return;
 
     VulkanFrameData &frame =
@@ -363,6 +374,85 @@ void Renderer::render(ImGuiManager &imgui)
     {
         throw std::runtime_error(
             "Failed to begin command buffer.");
+    }
+
+    if (computeFinishedSemaphore != VK_NULL_HANDLE)
+    {
+        VkBufferMemoryBarrier bufferBarrier{};
+
+        bufferBarrier.sType =
+            VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+
+        bufferBarrier.buffer =
+            particleBuffer->handle;
+
+        bufferBarrier.offset = 0;
+
+        bufferBarrier.size =
+            particleBuffer->size;
+
+        if (vkContext->computeQueueFamilyIndex !=
+            vkContext->graphicsQueueFamilyIndex)
+        {
+            bufferBarrier.srcAccessMask = 0;
+
+            bufferBarrier.dstAccessMask =
+                VK_ACCESS_SHADER_READ_BIT;
+
+            bufferBarrier.srcQueueFamilyIndex =
+                vkContext->computeQueueFamilyIndex;
+
+            bufferBarrier.dstQueueFamilyIndex =
+                vkContext->graphicsQueueFamilyIndex;
+
+            vkCmdPipelineBarrier(
+                commandBuffer,
+
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+
+                0,
+
+                0,
+                nullptr,
+
+                1,
+                &bufferBarrier,
+
+                0,
+                nullptr);
+        }
+        else
+        {
+            bufferBarrier.srcAccessMask =
+                VK_ACCESS_SHADER_WRITE_BIT;
+
+            bufferBarrier.dstAccessMask =
+                VK_ACCESS_SHADER_READ_BIT;
+
+            bufferBarrier.srcQueueFamilyIndex =
+                VK_QUEUE_FAMILY_IGNORED;
+
+            bufferBarrier.dstQueueFamilyIndex =
+                VK_QUEUE_FAMILY_IGNORED;
+
+            vkCmdPipelineBarrier(
+                commandBuffer,
+
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+
+                0,
+
+                0,
+                nullptr,
+
+                1,
+                &bufferBarrier,
+
+                0,
+                nullptr);
+        }
     }
 
     VulkanImageUtils::transitionImageLayout(
@@ -487,6 +577,7 @@ void Renderer::render(ImGuiManager &imgui)
 
     push.trail_width =
         Config::particles.trail_width;
+
     vkCmdPushConstants(
         commandBuffer,
         particleGraphicsPipeline.layout,
@@ -498,7 +589,7 @@ void Renderer::render(ImGuiManager &imgui)
 
     vkCmdDraw(
         commandBuffer,
-        particleCount * 6,
+        particleCount * 4,
         1,
         0,
         0);
@@ -523,8 +614,29 @@ void Renderer::render(ImGuiManager &imgui)
             "Failed to end command buffer.");
     }
 
-    VkPipelineStageFlags waitStage =
+    VkSemaphore waitSemaphores[2]{};
+    VkPipelineStageFlags waitStages[2]{};
+
+    uint32_t waitSemaphoreCount = 0;
+
+    if (computeFinishedSemaphore != VK_NULL_HANDLE)
+    {
+        waitSemaphores[waitSemaphoreCount] =
+            computeFinishedSemaphore;
+
+        waitStages[waitSemaphoreCount] =
+            VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+
+        ++waitSemaphoreCount;
+    }
+
+    waitSemaphores[waitSemaphoreCount] =
+        frame.imageAvailableSemaphore;
+
+    waitStages[waitSemaphoreCount] =
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    ++waitSemaphoreCount;
 
     VkSubmitInfo submitInfo{};
 
@@ -532,13 +644,13 @@ void Renderer::render(ImGuiManager &imgui)
         VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
     submitInfo.waitSemaphoreCount =
-        1;
+        waitSemaphoreCount;
 
     submitInfo.pWaitSemaphores =
-        &frame.imageAvailableSemaphore;
+        waitSemaphores;
 
     submitInfo.pWaitDstStageMask =
-        &waitStage;
+        waitStages;
 
     submitInfo.commandBufferCount =
         1;
@@ -683,6 +795,9 @@ void Renderer::destroy()
     particleBuffer = nullptr;
     particleCount = 0;
     particlesConfigured = false;
+
+    computeFinishedSemaphore =
+        VK_NULL_HANDLE;
 
     currentFrame = 0;
 
