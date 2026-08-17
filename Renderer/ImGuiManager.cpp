@@ -85,7 +85,51 @@ void ImGuiManager::processEvent(const sf::Event& event)
     if (!initialized)
         return;
 
-    (void)event;
+    ImGuiIO& io = ImGui::GetIO();
+
+    if (const auto* mouseMoved =
+            event.getIf<sf::Event::MouseMoved>())
+    {
+        io.AddMousePosEvent(
+            static_cast<float>(mouseMoved->position.x),
+            static_cast<float>(mouseMoved->position.y)
+        );
+    }
+
+    if (const auto* mouseButtonPressed =
+            event.getIf<sf::Event::MouseButtonPressed>())
+    {
+        if (mouseButtonPressed->button ==
+            sf::Mouse::Button::Left)
+        {
+            io.AddMouseButtonEvent(
+                0,
+                true
+            );
+        }
+    }
+
+    if (const auto* mouseButtonReleased =
+            event.getIf<sf::Event::MouseButtonReleased>())
+    {
+        if (mouseButtonReleased->button ==
+            sf::Mouse::Button::Left)
+        {
+            io.AddMouseButtonEvent(
+                0,
+                false
+            );
+        }
+    }
+
+    if (const auto* mouseWheel =
+            event.getIf<sf::Event::MouseWheelScrolled>())
+    {
+        io.AddMouseWheelEvent(
+            0.0f,
+            mouseWheel->delta
+        );
+    }
 }
 
 void ImGuiManager::newFrame(sf::Window& window)
@@ -95,13 +139,30 @@ void ImGuiManager::newFrame(sf::Window& window)
 
     ImGuiIO& io = ImGui::GetIO();
 
-    const sf::Vector2u size = window.getSize();
+    const sf::Vector2u size =
+        window.getSize();
 
-    io.DisplaySize = ImVec2(static_cast<float>(size.x), static_cast<float>(size.y));
+    io.DisplaySize =
+        ImVec2(
+            static_cast<float>(size.x),
+            static_cast<float>(size.y)
+        );
 
-    const auto now = std::chrono::steady_clock::now();
+    const sf::Vector2i mousePos =
+        sf::Mouse::getPosition(window);
 
-    float dt = std::chrono::duration<float>(now - lastFrameTime).count();
+    io.AddMousePosEvent(
+        static_cast<float>(mousePos.x),
+        static_cast<float>(mousePos.y)
+    );
+
+    const auto now =
+        std::chrono::steady_clock::now();
+
+    float dt =
+        std::chrono::duration<float>(
+            now - lastFrameTime
+        ).count();
 
     lastFrameTime = now;
 
@@ -110,16 +171,20 @@ void ImGuiManager::newFrame(sf::Window& window)
 
     io.DeltaTime = dt;
 
-    frameTime = dt * 1000.0f;
+    frameTime =
+        dt * 1000.0f;
 
-    const float currentFPS = 1.0f / dt;
+    const float currentFPS =
+        1.0f / dt;
 
     constexpr float smoothing = 0.1f;
 
     if (fps <= 0.0f)
         fps = currentFPS;
     else
-        fps += (currentFPS - fps) * smoothing;
+        fps +=
+            (currentFPS - fps) *
+            smoothing;
 
     ImGui_ImplVulkan_NewFrame();
 

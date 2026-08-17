@@ -1,7 +1,9 @@
 #include "Renderer/Renderer.h"
 #include "Particles/ParticleSystem.h"
 #include "Renderer/ImGuiManager.h"
+#include "Renderer/StartingScreen.h"
 #include "Config/Config.h"
+
 #include <SFML/Window.hpp>
 
 #define WIN32_LEAN_AND_MEAN
@@ -19,8 +21,7 @@ int main()
 {
     try
     {
-        Config::load(
-            "Config/config.ini");
+        Config::load("Config/config.ini");
 
         sf::Window window(
             sf::VideoMode({
@@ -32,122 +33,130 @@ int main()
             sf::State::Windowed
         );
 
-        std::vector<const char*> extensions =
-        {
+        std::vector<const char*> extensions = {
             VK_KHR_SURFACE_EXTENSION_NAME,
-
 #ifdef _WIN32
             VK_KHR_WIN32_SURFACE_EXTENSION_NAME
 #endif
         };
 
         VulkanContext vulkanContext;
-
-        vulkanContext.initInstance(
-            extensions
-        );
+        vulkanContext.initInstance(extensions);
 
         Renderer renderer;
-
-        renderer.init(
-            vulkanContext,
-            window
-        );
-
-        ParticleSystem particles;
-
-        particles.init(
-            vulkanContext,
-            Config::particles.count,
-            1280,
-            720
-        );
-
-        renderer.setParticleBuffer(
-            particles.getBuffer(),
-            particles.getCount()
-        );
-
-        renderer.setComputeFinishedSemaphore(
-            particles.getComputeFinishedSemaphore()
-        );
+        renderer.init(vulkanContext, window);
 
         ImGuiManager imgui;
-
         imgui.init(
             vulkanContext,
             window,
             renderer.getSwapchainFormat()
         );
 
+        StartingScreen startingScreen;
+        ParticleSystem particles;
+
         bool running = true;
+        bool simulationStarted = false;
+        ControlMode controlMode = ControlMode::None;
 
         while (running)
         {
-            while (const std::optional event =
-                       window.pollEvent())
+            while (const std::optional event = window.pollEvent())
             {
-                imgui.processEvent(
-                    *event);
+                imgui.processEvent(*event);
 
                 if (event->is<sf::Event::Closed>())
-                {
                     running = false;
-                }
+            }
 
-                if (const auto* resized =
-                        event->getIf<sf::Event::Resized>())
+            imgui.newFrame(window);
+
+            if (!simulationStarted)
+            {
+                controlMode = startingScreen.render();
+
+                if (controlMode != ControlMode::None)
                 {
-                    (void)resized;
+                    simulationStarted = true;
+
+                    const char* shaderPath =
+                        controlMode == ControlMode::Mouse
+                            ? "shaders/particle.comp.spv"
+                            : "shaders/music.comp.spv";
+
+                    uint32_t pushConstantSize =
+                        controlMode == ControlMode::Mouse
+                            ? sizeof(ComputePush)
+                            : sizeof(MusicPush);
+
+                    std::cout
+                        << "Starting simulation: "
+                        << (controlMode == ControlMode::Mouse ? "Mouse\n" : "Music\n");
+
+                    particles.init(
+                        vulkanContext,
+                        Config::particles.count,
+                        Config::window.width,
+                        Config::window.height,
+                        shaderPath,
+                        pushConstantSize
+                    );
+
+                    renderer.setParticleBuffer(
+                        particles.getBuffer(),
+                        particles.getCount()
+                    );
+
+                    renderer.setComputeFinishedSemaphore(
+                        particles.getComputeFinishedSemaphore()
+                    );
                 }
             }
 
-            imgui.newFrame(
-                window);
+            if (simulationStarted)
+            {
+                if (controlMode == ControlMode::Mouse)
+                {
+                    sf::Vector2i mousePos = sf::Mouse::getPosition(window);
 
-            sf::Vector2i mousePos =
-                sf::Mouse::getPosition(
-                    window);
+                    ComputePush push{};
+                    push.particleCount = particles.getCount();
+                    push.mouseX = static_cast<float>(mousePos.x);
+                    push.mouseY = static_cast<float>(mousePos.y);
 
-            float mouseX =
-                static_cast<float>(
-                    mousePos.x);
+                    particles.update(
+                        vulkanContext,
+                        &push,
+                        sizeof(push)
+                    );
+                }
+                else if (controlMode == ControlMode::Music)
+                {
+                    MusicPush push{};
+                    push.particleCount = particles.getCount();
 
-            float mouseY =
-                static_cast<float>(
-                    mousePos.y);
+                    particles.update(
+                        vulkanContext,
+                        &push,
+                        sizeof(push)
+                    );
+                }
+            }
 
-            particles.update(
-                vulkanContext,
-                mouseX,
-                mouseY
-            );
-
-            renderer.render(
-                imgui);
+            renderer.render(imgui);
         }
 
-        vkDeviceWaitIdle(
-            vulkanContext.device
-        );
+        vkDeviceWaitIdle(vulkanContext.device);
 
         imgui.destroy();
-
-        particles.destroy(
-            vulkanContext.device
-        );
-
+        particles.destroy(vulkanContext.device);
         renderer.destroy();
-
         vulkanContext.destroy();
     }
     catch (const std::exception& e)
     {
-        std::cerr
-            << "FATAL ERROR: "
-            << e.what()
-            << '\n';
-
+        std::cerr << "FATAL ERROR: " << e.what() << '\n';
         return 1;
     }
 

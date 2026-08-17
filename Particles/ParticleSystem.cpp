@@ -1,18 +1,14 @@
 #include "ParticleSystem.h"
 #include "../VK/VulkanContext.h"
 
-struct ComputePush
-{
-    uint32_t particleCount;
-    float mouseX;
-    float mouseY;
-};
-
 void ParticleSystem::init(
-    VulkanContext &context,
+    VulkanContext& context,
     uint32_t count,
     uint32_t width,
-    uint32_t height)
+    uint32_t height,
+    const std::string& shaderPath,
+    uint32_t pushConstantSize
+)
 {
     particles.resize(count);
 
@@ -27,8 +23,12 @@ void ParticleSystem::init(
 
     for (uint32_t i = 0; i < count; ++i)
     {
-        particles[i].x = spawnX;
-        particles[i].y = spawnY;
+        particles[i].x = static_cast<float>(spawnX);
+        particles[i].y = static_cast<float>(spawnY);
+
+        particles[i].prevX = static_cast<float>(spawnX);
+        particles[i].prevY = static_cast<float>(spawnY);
+
         particles[i].vx = distVelocity(gen);
         particles[i].vy = distVelocity(gen);
 
@@ -45,61 +45,59 @@ void ParticleSystem::init(
     particleBuffer.initStorage(
         context,
         bufferSize,
-        true);
+        true
+    );
 
     particleBuffer.upload(
         particles.data(),
-        bufferSize);
+        bufferSize
+    );
 
     computePipeline.init(
         context,
-        "shaders/particle.comp.spv",
-        sizeof(ComputePush),
+        shaderPath,
+        pushConstantSize,
         256,
-        1);
+        1
+    );
 
     computePipeline.bindBuffers(
         context,
-        {particleBuffer});
+        {particleBuffer}
+    );
 }
 
 void ParticleSystem::update(
-    VulkanContext &context,
-    float mouseX,
-    float mouseY)
+    VulkanContext& context,
+    const void* pushData,
+    uint32_t pushConstantSize
+)
 {
     constexpr uint32_t WORKGROUP_SIZE = 256;
 
     uint32_t particleCount =
         static_cast<uint32_t>(
-            particles.size());
+            particles.size()
+        );
 
     uint32_t groupCount =
         (particleCount + WORKGROUP_SIZE - 1) /
         WORKGROUP_SIZE;
-
-    ComputePush pushData{};
-
-    pushData.particleCount =
-        particleCount;
-
-    pushData.mouseX =
-        mouseX;
-
-    pushData.mouseY =
-        mouseY;
 
     computePipeline.dispatch(
         context,
         groupCount,
         1,
         1,
-        &pushData,
-        sizeof(ComputePush),
-        particleBuffer.handle);
+        pushData,
+        pushConstantSize,
+        particleBuffer.handle
+    );
 }
 
-void ParticleSystem::destroy(VkDevice device)
+void ParticleSystem::destroy(
+    VkDevice device
+)
 {
     computePipeline.destroy(device);
     particleBuffer.destroy(device);

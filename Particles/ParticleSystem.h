@@ -1,14 +1,29 @@
 #pragma once
 
+#include "RGB.h"
 #include "Particle.h"
 #include "../VK/VulkanBuffer.h"
 #include "../VK/VulkanComputePipeline.h"
 
+#include <vulkan/vulkan.h>
 #include <vector>
-#include <cstdint>
 #include <random>
+#include <cstdint>
+#include <string>
 
 class VulkanContext;
+
+struct ComputePush
+{
+    uint32_t particleCount;
+    float mouseX;
+    float mouseY;
+};
+
+struct MusicPush
+{
+    uint32_t particleCount;
+};
 
 class ParticleSystem
 {
@@ -17,30 +32,31 @@ public:
         VulkanContext& context,
         uint32_t count,
         uint32_t width,
-        uint32_t height
+        uint32_t height,
+        const std::string& shaderPath,
+        uint32_t pushConstantSize
     );
 
     void update(
         VulkanContext& context,
-        float mouseX,
-        float mouseY
+        const void* pushData,
+        uint32_t pushConstantSize
     );
 
-    void destroy(VkDevice device);
-
-    const std::vector<Particle>& getParticles() const
-    {
-        return particles;
-    }
-
-    uint32_t getCount() const
-    {
-        return static_cast<uint32_t>(particles.size());
-    }
+    void destroy(
+        VkDevice device
+    );
 
     const VulkanBuffer& getBuffer() const
     {
         return particleBuffer;
+    }
+
+    uint32_t getCount() const
+    {
+        return static_cast<uint32_t>(
+            particles.size()
+        );
     }
 
     VkSemaphore getComputeFinishedSemaphore() const
@@ -52,6 +68,5 @@ private:
     std::vector<Particle> particles;
 
     VulkanBuffer particleBuffer;
-
     VulkanComputePipeline computePipeline;
 };

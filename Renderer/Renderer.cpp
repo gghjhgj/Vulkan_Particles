@@ -301,12 +301,6 @@ void Renderer::render(ImGuiManager &imgui)
     if (!initialized)
         return;
 
-    if (!particlesConfigured)
-        return;
-
-    if (particleBuffer == nullptr)
-        return;
-
     VulkanFrameData &frame =
         frames[currentFrame];
 
@@ -507,94 +501,99 @@ void Renderer::render(ImGuiManager &imgui)
     vkCmdBeginRendering(
         commandBuffer,
         &renderingInfo);
+        
+    if (particlesConfigured &&
+        particleBuffer != nullptr)
+    {
+        vkCmdBindPipeline(
+            commandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            particleGraphicsPipeline.handle);
 
-    vkCmdBindPipeline(
-        commandBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        particleGraphicsPipeline.handle);
+        vkCmdBindDescriptorSets(
+            commandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            particleGraphicsPipeline.layout,
+            0,
+            1,
+            &particleDescriptorSet,
+            0,
+            nullptr);
 
-    vkCmdBindDescriptorSets(
-        commandBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        particleGraphicsPipeline.layout,
-        0,
-        1,
-        &particleDescriptorSet,
-        0,
-        nullptr);
+        VkViewport viewport{};
 
-    VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
 
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
+        viewport.width =
+            static_cast<float>(
+                swapchain.extent.width);
 
-    viewport.width =
-        static_cast<float>(
-            swapchain.extent.width);
+        viewport.height =
+            static_cast<float>(
+                swapchain.extent.height);
 
-    viewport.height =
-        static_cast<float>(
-            swapchain.extent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
 
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(
+            commandBuffer,
+            0,
+            1,
+            &viewport);
 
-    vkCmdSetViewport(
-        commandBuffer,
-        0,
-        1,
-        &viewport);
+        VkRect2D scissor{};
 
-    VkRect2D scissor{};
+        scissor.offset =
+            {0, 0};
 
-    scissor.offset =
-        {0, 0};
+        scissor.extent =
+            swapchain.extent;
 
-    scissor.extent =
-        swapchain.extent;
+        vkCmdSetScissor(
+            commandBuffer,
+            0,
+            1,
+            &scissor);
 
-    vkCmdSetScissor(
-        commandBuffer,
-        0,
-        1,
-        &scissor);
+        ParticleRenderPushConstant push{};
 
-    ParticleRenderPushConstant push{};
+        push.width =
+            static_cast<float>(
+                swapchain.extent.width);
 
-    push.width =
-        static_cast<float>(
-            swapchain.extent.width);
+        push.height =
+            static_cast<float>(
+                swapchain.extent.height);
 
-    push.height =
-        static_cast<float>(
-            swapchain.extent.height);
+        push.size =
+            Config::particles.size;
 
-    push.size =
-        Config::particles.size;
+        push.trail_length =
+            Config::particles.trail_length;
 
-    push.trail_length =
-        Config::particles.trail_length;
+        push.trail_width =
+            Config::particles.trail_width;
 
-    push.trail_width =
-        Config::particles.trail_width;
-
-    vkCmdPushConstants(
-        commandBuffer,
-        particleGraphicsPipeline.layout,
-        VK_SHADER_STAGE_VERTEX_BIT |
+        vkCmdPushConstants(
+            commandBuffer,
+            particleGraphicsPipeline.layout,
+            VK_SHADER_STAGE_VERTEX_BIT |
             VK_SHADER_STAGE_FRAGMENT_BIT,
-        0,
-        sizeof(ParticleRenderPushConstant),
-        &push);
+            0,
+            sizeof(ParticleRenderPushConstant),
+            &push);
 
-    vkCmdDraw(
-        commandBuffer,
-        particleCount * 4,
-        1,
-        0,
-        0);
+        vkCmdDraw(
+            commandBuffer,
+            particleCount * 4,
+            1,
+            0,
+            0);
+    }
 
     imgui.render(commandBuffer);
+
 
     vkCmdEndRendering(
         commandBuffer);
