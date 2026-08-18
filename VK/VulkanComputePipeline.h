@@ -19,7 +19,8 @@ public:
         const std::string& shaderPath,
         uint32_t pushConstantSize,
         uint32_t workGroupSizeX,
-        uint32_t bindingCount
+        uint32_t bindingCount,
+        uint32_t specializationConstant
     );
 
     void bindBuffers(

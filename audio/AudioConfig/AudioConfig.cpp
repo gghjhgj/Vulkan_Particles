@@ -330,4 +330,53 @@ void AudioConfig::load(
             "audio",
             "bpm_max"
         );
+
+    audio.deviation_long_history_ms = 
+        get<float>(
+            ini,
+            "audio",
+            "deviation_long_history_ms"
+        );
+
+    audio.deviation_short_history_ms = 
+        get<float>(
+            ini,
+            "audio",
+            "deviation_short_history_ms"
+        );
+    
+    audio.energyScaleDb =
+        get<float>(
+            ini,
+            "audio",
+            "energyScaleDb"
+        );
+
+    audio.normalizedScale =
+        get<float>(
+            ini,
+            "audio",
+            "normalizedScale"
+        );
+
+    audio.fluxScale =
+        get<float>(
+            ini,
+            "audio",
+            "fluxScale"
+        );
+
+    audio.onsetScale =
+        get<float>(
+            ini,
+            "audio",
+            "onsetScale"
+        );
+
+    audio.centroidScaleHz =
+        get<float>(
+            ini,
+            "audio",
+            "centroidScaleHz"
+        );
 }

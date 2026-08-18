@@ -8,12 +8,20 @@
 #include <memory>
 
 #include "AudioAnalyzer.h"
+#include "AudioDeviationAnalyzer.h"
+#include "MusicPush.h"
 
 class AudioBuffer;
 
 class WasapiCapture
 {
 public:
+    const MusicPush::Data& getMusicPush() const noexcept
+    {
+        return musicPush.get();
+    }
+    
+
     WasapiCapture();
     ~WasapiCapture();
 
@@ -21,6 +29,7 @@ public:
     void run();
 
 private:
+
     IMMDeviceEnumerator* deviceEnumerator =
         nullptr;
 
@@ -45,7 +54,12 @@ private:
     std::unique_ptr<AudioAnalyzer>
         analyzer;
 
+    std::unique_ptr<AudioDeviationAnalyzer>
+        deviationAnalyzer;
+
     AudioAnalysis latestAnalysis;
+    AudioDeviation latestDeviation;
+    MusicPush musicPush;
 
     void cleanup();
 

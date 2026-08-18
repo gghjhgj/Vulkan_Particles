@@ -68,7 +68,8 @@ void VulkanComputePipeline::init(
     const std::string &shaderPath,
     uint32_t pushConstantSize,
     uint32_t workGroupSizeX,
-    uint32_t bindingCount)
+    uint32_t bindingCount,
+    uint32_t specializationConstant)
 {
     auto shaderCode =
         readFile(shaderPath);
@@ -187,30 +188,35 @@ void VulkanComputePipeline::init(
     pipelineInfo.stage.pName =
         "main";
 
-    VkSpecializationMapEntry specMapEntry{};
+    uint32_t specializationData[2] =
+        {
+            workGroupSizeX,
+            specializationConstant
+        };
+
+    VkSpecializationMapEntry specMapEntries[2]{};
+
+    specMapEntries[0].constantID = 0;
+    specMapEntries[0].offset = 0;
+    specMapEntries[0].size = sizeof(uint32_t);
+
+    specMapEntries[1].constantID = 1;
+    specMapEntries[1].offset = sizeof(uint32_t);
+    specMapEntries[1].size = sizeof(uint32_t);
 
     VkSpecializationInfo specInfo{};
 
-    bool useSpec =
-        (workGroupSizeX > 0);
+    specInfo.mapEntryCount = 2;
+    specInfo.pMapEntries = specMapEntries;
 
-    if (useSpec)
-    {
-        specMapEntry.constantID = 0;
-        specMapEntry.offset = 0;
-        specMapEntry.size =
-            sizeof(uint32_t);
+    specInfo.dataSize =
+        sizeof(specializationData);
 
-        specInfo.mapEntryCount = 1;
+    specInfo.pData =
+        specializationData;
 
-        specInfo.pMapEntries = &specMapEntry;
-
-        specInfo.dataSize = sizeof(uint32_t);
-
-        specInfo.pData = &workGroupSizeX;
-
-        pipelineInfo.stage.pSpecializationInfo = &specInfo;
-    }
+    pipelineInfo.stage.pSpecializationInfo =
+        &specInfo;
 
     if (vkCreateComputePipelines(
             context.device,
@@ -417,11 +423,11 @@ void VulkanComputePipeline::bindBuffers(
 }
 
 void VulkanComputePipeline::dispatch(
-    const VulkanContext& context,
+    const VulkanContext &context,
     uint32_t groupCountX,
     uint32_t groupCountY,
     uint32_t groupCountZ,
-    const void* pushConstantData,
+    const void *pushConstantData,
     uint32_t pushConstantSize,
     VkBuffer particleBuffer)
 {

@@ -27,6 +27,14 @@ struct AudioConfigData
 
     float bpm_min;
     float bpm_max;
+
+    float deviation_long_history_ms;
+    float deviation_short_history_ms;
+    float energyScaleDb;
+    float normalizedScale;
+    float fluxScale;
+    float onsetScale;
+    float centroidScaleHz;
 };
 
 class AudioConfig

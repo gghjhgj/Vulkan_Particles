@@ -2,30 +2,17 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <vector>
 #include <mutex>
+#include <vector>
 
-class AudioBuffer
-{
+class AudioBuffer {
 public:
-    AudioBuffer(
-        uint32_t sampleRate,
-        uint32_t channels,
-        uint32_t historyMs
-    );
+    AudioBuffer(uint32_t sampleRate, uint32_t channels, uint32_t historyMs);
 
-    void push(
-        const float* samples,
-        size_t sampleCount
-    );
-
-    size_t readLatest(
-        float* destination,
-        size_t sampleCount
-    ) const;
+    void push(const float* samples, size_t sampleCount);
+    size_t readLatest(float* destination, size_t sampleCount) const;
 
     size_t availableSamples() const;
-
     size_t capacitySamples() const;
 
     uint32_t sampleRate() const;

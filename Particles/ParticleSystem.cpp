@@ -58,7 +58,8 @@ void ParticleSystem::init(
         shaderPath,
         pushConstantSize,
         256,
-        1
+        1,
+        Config::particles.count
     );
 
     computePipeline.bindBuffers(
@@ -75,14 +76,7 @@ void ParticleSystem::update(
 {
     constexpr uint32_t WORKGROUP_SIZE = 256;
 
-    uint32_t particleCount =
-        static_cast<uint32_t>(
-            particles.size()
-        );
-
-    uint32_t groupCount =
-        (particleCount + WORKGROUP_SIZE - 1) /
-        WORKGROUP_SIZE;
+    uint32_t groupCount = (Config::particles.count + 255) / 256;
 
     computePipeline.dispatch(
         context,

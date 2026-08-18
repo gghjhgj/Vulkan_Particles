@@ -4,6 +4,8 @@
 
 layout(local_size_x = 256) in;
 
+layout(constant_id = 0) const uint WORKGROUP_SIZE = 256;
+layout(constant_id = 1) const uint PARTICLE_COUNT = 0;
 layout(set = 0, binding = 0) buffer Particles
 {
     Particle particles[];
@@ -11,7 +13,6 @@ layout(set = 0, binding = 0) buffer Particles
 
 layout(push_constant) uniform Push
 {
-    uint particleCount;
     float mouseX;
     float mouseY;
 } push;
@@ -20,7 +21,7 @@ void main()
 {
     uint id = gl_GlobalInvocationID.x;
 
-    if (id >= push.particleCount)
+    if (id >= PARTICLE_COUNT)
         return;
 
     Particle p = particles[id];

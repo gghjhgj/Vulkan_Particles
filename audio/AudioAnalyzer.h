@@ -7,15 +7,13 @@
 
 class AudioBuffer;
 
-struct FrequencyBand
-{
+struct FrequencyBand {
     float linear = 0.0f;
     float db = -80.0f;
     float normalized = 0.0f;
 };
 
-struct FrequencyBands
-{
+struct FrequencyBands {
     FrequencyBand subBass;
     FrequencyBand bass;
     FrequencyBand lowMid;
@@ -25,8 +23,7 @@ struct FrequencyBands
     FrequencyBand high;
 };
 
-struct AudioAnalysis
-{
+struct AudioAnalysis {
     float rms = 0.0f;
     float rmsDb = -80.0f;
 
@@ -73,8 +70,7 @@ struct AudioAnalysis
     uint64_t analysisFrame = 0;
 };
 
-class AudioAnalyzer
-{
+class AudioAnalyzer {
 public:
     AudioAnalyzer(
         uint32_t fftSize,
@@ -90,10 +86,7 @@ public:
         float bpmMax
     );
 
-    AudioAnalysis analyze(
-        const AudioBuffer& buffer,
-        size_t newFrames
-    );
+    AudioAnalysis analyze(const AudioBuffer& buffer, size_t newFrames);
 
 private:
     uint32_t m_fftSize;
@@ -114,7 +107,6 @@ private:
     float m_bpmMax;
 
     uint64_t m_analysisFrame = 0;
-
     double m_timeSeconds = 0.0;
 
     float m_previousSmoothedEnergy = 0.0f;
@@ -145,78 +137,26 @@ private:
 
     static constexpr int MAX_BEAT_MULTIPLE = 4;
 
-    void calculateTimeDomain(
-        const std::vector<float>& mono,
-        AudioAnalysis& result
-    ) const;
+    void calculateTimeDomain(const std::vector<float>& mono, AudioAnalysis& result) const;
+    void calculateSpectrum(const std::vector<float>& mono, AudioAnalysis& result);
+    void calculateSpectralFeatures(AudioAnalysis& result) const;
+    void calculateBands(AudioAnalysis& result) const;
 
-    void calculateSpectrum(
-        const std::vector<float>& mono,
-        AudioAnalysis& result
-    );
+    void updateDynamics(AudioAnalysis& result, size_t newFrames);
+    void updateRhythm(AudioAnalysis& result);
+    void updateTempo(float beatInterval, AudioAnalysis& result);
 
-    void calculateSpectralFeatures(
-        AudioAnalysis& result
-    ) const;
+    bool isLocalOnsetPeak(float onset) const;
+    bool isBeatTimingValid(double currentTime) const;
 
-    void calculateBands(
-        AudioAnalysis& result
-    ) const;
+    float smooth(float current, float previous, float deltaMs) const;
+    float normalizeDb(float db) const;
 
-    void updateDynamics(
-        AudioAnalysis& result,
-        size_t newFrames
-    );
+    static float safeDb(float value);
+    static float safePowerDb(float value);
+    static float clamp01(float value);
 
-    void updateRhythm(
-        AudioAnalysis& result
-    );
-
-    void updateTempo(
-        float beatInterval,
-        AudioAnalysis& result
-    );
-
-    bool isLocalOnsetPeak(
-        float onset
-    ) const;
-
-    bool isBeatTimingValid(
-        double currentTime
-    ) const;
-
-    float smooth(
-        float current,
-        float previous,
-        float deltaMs
-    ) const;
-
-    float normalizeDb(
-        float db
-    ) const;
-
-    static float safeDb(
-        float value
-    );
-
-    static float safePowerDb(
-        float value
-    );
-
-    static float clamp01(
-        float value
-    );
-
-    static float average(
-        const std::deque<float>& values
-    );
-
-    static float standardDeviation(
-        const std::deque<float>& values,
-        float mean
-    );
-
-    static float median(
-        const std::deque<float>& values
-    );
+    static float average(const std::deque<float>& values);
+    static float standardDeviation(const std::deque<float>& values, float mean);
+    static float median(const std::deque<float>& values);
 };

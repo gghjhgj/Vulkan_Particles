@@ -3,6 +3,8 @@
 #include "Renderer/ImGuiManager.h"
 #include "Renderer/StartingScreen.h"
 #include "Config/Config.h"
+#include "audio/WasapiCapture.h"
+#include "audio/AudioConfig/AudioConfig.h"
 
 #include <SFML/Window.hpp>
 
@@ -16,24 +18,22 @@
 #include <stdexcept>
 #include <vector>
 #include <optional>
+#include <thread>
 
 int main()
 {
     try
     {
         Config::load("Config/config.ini");
-
+        std::thread audioThread;
         sf::Window window(
-            sf::VideoMode({
-                Config::window.width,
-                Config::window.height
-            }),
+            sf::VideoMode({Config::window.width,
+                           Config::window.height}),
             "Particle Simulation",
             sf::Style::Default,
-            sf::State::Windowed
-        );
+            sf::State::Windowed);
 
-        std::vector<const char*> extensions = {
+        std::vector<const char *> extensions = {
             VK_KHR_SURFACE_EXTENSION_NAME,
 #ifdef _WIN32
             VK_KHR_WIN32_SURFACE_EXTENSION_NAME
@@ -50,15 +50,18 @@ int main()
         imgui.init(
             vulkanContext,
             window,
-            renderer.getSwapchainFormat()
-        );
+            renderer.getSwapchainFormat());
 
         StartingScreen startingScreen;
         ParticleSystem particles;
 
         bool running = true;
         bool simulationStarted = false;
+
         ControlMode controlMode = ControlMode::None;
+
+        AudioConfig audioConfig;
+        WasapiCapture wasapiCapture;
 
         while (running)
         {
@@ -80,7 +83,7 @@ int main()
                 {
                     simulationStarted = true;
 
-                    const char* shaderPath =
+                    const char *shaderPath =
                         controlMode == ControlMode::Mouse
                             ? "shaders/particle.comp.spv"
                             : "shaders/music.comp.spv";
@@ -90,27 +93,38 @@ int main()
                             ? sizeof(ComputePush)
                             : sizeof(MusicPush);
 
-                    std::cout
-                        << "Starting simulation: "
-                        << (controlMode == ControlMode::Mouse ? "Mouse\n" : "Music\n");
-
                     particles.init(
                         vulkanContext,
                         Config::particles.count,
                         Config::window.width,
                         Config::window.height,
                         shaderPath,
-                        pushConstantSize
-                    );
+                        pushConstantSize);
 
                     renderer.setParticleBuffer(
                         particles.getBuffer(),
-                        particles.getCount()
-                    );
+                        particles.getCount());
 
                     renderer.setComputeFinishedSemaphore(
-                        particles.getComputeFinishedSemaphore()
-                    );
+                        particles.getComputeFinishedSemaphore());
+
+                    if (controlMode == ControlMode::Music)
+                    {
+                        audioConfig.load(
+                            "audio/AudioConfig/AudioConfig.ini");
+
+                        if (!wasapiCapture.init())
+                        {
+                            throw std::runtime_error(
+                                "Failed to initialize WASAPI capture.");
+                        }
+
+                        audioThread = std::thread(
+                            [&wasapiCapture]()
+                            {
+                                wasapiCapture.run();
+                            });
+                    }
                 }
             }
 
@@ -119,28 +133,22 @@ int main()
                 if (controlMode == ControlMode::Mouse)
                 {
                     sf::Vector2i mousePos = sf::Mouse::getPosition(window);
-
                     ComputePush push{};
-                    push.particleCount = particles.getCount();
                     push.mouseX = static_cast<float>(mousePos.x);
                     push.mouseY = static_cast<float>(mousePos.y);
-
                     particles.update(
                         vulkanContext,
                         &push,
-                        sizeof(push)
-                    );
+                        sizeof(push));
                 }
                 else if (controlMode == ControlMode::Music)
                 {
-                    MusicPush push{};
-                    push.particleCount = particles.getCount();
-
+                    const MusicPush::Data &push = wasapiCapture.getMusicPush();
+                    //MusicPush::printData(push);
                     particles.update(
                         vulkanContext,
                         &push,
-                        sizeof(push)
-                    );
+                        sizeof(push));
                 }
             }
 
@@ -154,9 +162,13 @@ int main()
         renderer.destroy();
         vulkanContext.destroy();
     }
-    catch (const std::exception& e)
+    catch (const std::exception &e)
     {
-        std::cerr << "FATAL ERROR: " << e.what() << '\n';
+        std::cerr
+            << "FATAL ERROR: "
+            << e.what()
+            << '\n';
+
         return 1;
     }
 

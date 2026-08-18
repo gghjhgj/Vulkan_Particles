@@ -2,6 +2,7 @@
 
 #include "RGB.h"
 #include "Particle.h"
+#include "../Config/Config.h"
 #include "../VK/VulkanBuffer.h"
 #include "../VK/VulkanComputePipeline.h"
 
@@ -15,14 +16,8 @@ class VulkanContext;
 
 struct ComputePush
 {
-    uint32_t particleCount;
     float mouseX;
     float mouseY;
-};
-
-struct MusicPush
-{
-    uint32_t particleCount;
 };
 
 class ParticleSystem
