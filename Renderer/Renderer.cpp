@@ -90,6 +90,9 @@ void Renderer::init(
     createParticlePipeline();
     createParticleDescriptors();
 
+    createFluidPipeline();
+    createFluidDescriptors();
+
     initialized = true;
 
     std::cout
@@ -191,8 +194,8 @@ void Renderer::createParticlePipeline()
 
     particleGraphicsPipeline.init(
         *vkContext,
-        "shaders/particle_vert.spv",
-        "shaders/particle_frag.spv",
+        "shaders/particles/particle_vert.spv",
+        "shaders/particles/particle_frag.spv",
         VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         sizeof(ParticleRenderPushConstant),
         swapchain.imageFormat,
@@ -296,6 +299,92 @@ void Renderer::setParticleBuffer(
     particlesConfigured = true;
 }
 
+void Renderer::createFluidPipeline()
+{
+    VkDescriptorSetLayoutBinding binding{};
+    binding.binding = 0;
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    binding.descriptorCount = 1;
+    binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 1;
+    layoutInfo.pBindings = &binding;
+
+    if (vkCreateDescriptorSetLayout(
+            vkContext->device,
+            &layoutInfo,
+            nullptr,
+            &fluidDescriptorSetLayout) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create fluid descriptor set layout.");
+    }
+
+    std::vector<VkDescriptorSetLayout> layouts = { fluidDescriptorSetLayout };
+
+    fluidGraphicsPipeline.init(
+        *vkContext,
+        "shaders/fluids/fluid_vert.spv",
+        "shaders/fluids/fluid_frag.spv",
+        VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        sizeof(FluidRenderPushConstant),
+        swapchain.imageFormat,
+        layouts
+    );
+}
+
+void Renderer::createFluidDescriptors()
+{
+    VkDescriptorPoolSize poolSize{};
+    poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    poolSize.descriptorCount = MAX_FRAMES_IN_FLIGHT;
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT;
+
+    if (vkCreateDescriptorPool(
+            vkContext->device,
+            &poolInfo,
+            nullptr,
+            &fluidDescriptorPool) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create fluid descriptor pool.");
+    }
+
+    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, fluidDescriptorSetLayout);
+
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = fluidDescriptorPool;
+    allocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+    allocInfo.pSetLayouts = layouts.data();
+
+    fluidDescriptorSet.resize(MAX_FRAMES_IN_FLIGHT);
+
+    if (vkAllocateDescriptorSets(
+            vkContext->device,
+            &allocInfo,
+            fluidDescriptorSet.data()) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to allocate fluid descriptor set.");
+    }
+}
+
+void Renderer::setFluidBuffer(
+    const VulkanBuffer &buffer,
+    uint32_t simWidth,
+    uint32_t simHeight)
+{
+    fluidBuffer = &buffer;
+    fluidSimWidth = simWidth;
+    fluidSimHeight = simHeight;
+    fluidConfigured = true;
+}
+
 void Renderer::render(ImGuiManager &imgui)
 {
     if (!initialized)
@@ -316,6 +405,30 @@ void Renderer::render(ImGuiManager &imgui)
     {
         throw std::runtime_error(
             "Failed to wait for frame fence.");
+    }
+
+    if (fluidConfigured && fluidBuffer != nullptr)
+    {
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = fluidBuffer->handle;
+        bufferInfo.offset = 0;
+        bufferInfo.range = fluidBuffer->size;
+
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = fluidDescriptorSet[currentFrame];
+        write.dstBinding = 0;
+        write.dstArrayElement = 0;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write.descriptorCount = 1;
+        write.pBufferInfo = &bufferInfo;
+
+        vkUpdateDescriptorSets(
+            vkContext->device,
+            1,
+            &write,
+            0,
+            nullptr);
     }
 
     uint32_t imageIndex = 0;
@@ -372,80 +485,87 @@ void Renderer::render(ImGuiManager &imgui)
 
     if (computeFinishedSemaphore != VK_NULL_HANDLE)
     {
-        VkBufferMemoryBarrier bufferBarrier{};
+        VkBuffer syncBufferHandle = VK_NULL_HANDLE;
+        VkDeviceSize syncBufferSize = 0;
 
-        bufferBarrier.sType =
-            VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-
-        bufferBarrier.buffer =
-            particleBuffer->handle;
-
-        bufferBarrier.offset = 0;
-
-        bufferBarrier.size =
-            particleBuffer->size;
-
-        if (vkContext->computeQueueFamilyIndex !=
-            vkContext->graphicsQueueFamilyIndex)
+        if (particleBuffer != nullptr)
         {
-            bufferBarrier.srcAccessMask = 0;
-
-            bufferBarrier.dstAccessMask =
-                VK_ACCESS_SHADER_READ_BIT;
-
-            bufferBarrier.srcQueueFamilyIndex =
-                vkContext->computeQueueFamilyIndex;
-
-            bufferBarrier.dstQueueFamilyIndex =
-                vkContext->graphicsQueueFamilyIndex;
-
-            vkCmdPipelineBarrier(
-                commandBuffer,
-
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-
-                0,
-
-                0,
-                nullptr,
-
-                1,
-                &bufferBarrier,
-
-                0,
-                nullptr);
+            syncBufferHandle = particleBuffer->handle;
+            syncBufferSize = particleBuffer->size;
         }
-        else
+        else if (fluidBuffer != nullptr)
         {
-            bufferBarrier.srcAccessMask =
-                VK_ACCESS_SHADER_WRITE_BIT;
+            syncBufferHandle = fluidBuffer->handle;
+            syncBufferSize = fluidBuffer->size;
+        }
 
-            bufferBarrier.dstAccessMask =
-                VK_ACCESS_SHADER_READ_BIT;
+        if (syncBufferHandle != VK_NULL_HANDLE)
+        {
+            VkBufferMemoryBarrier bufferBarrier{};
 
-            bufferBarrier.srcQueueFamilyIndex =
-                VK_QUEUE_FAMILY_IGNORED;
+            bufferBarrier.sType =
+                VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
 
-            bufferBarrier.dstQueueFamilyIndex =
-                VK_QUEUE_FAMILY_IGNORED;
+            bufferBarrier.buffer =
+                syncBufferHandle;
 
-            vkCmdPipelineBarrier(
-                commandBuffer,
+            bufferBarrier.offset = 0;
 
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+            bufferBarrier.size =
+                syncBufferSize;
 
-                0,
+            if (vkContext->computeQueueFamilyIndex !=
+                vkContext->graphicsQueueFamilyIndex)
+            {
+                bufferBarrier.srcAccessMask = 0;
 
-                0,
-                nullptr,
+                bufferBarrier.dstAccessMask =
+                    VK_ACCESS_SHADER_READ_BIT;
 
-                1,
-                &bufferBarrier,
+                bufferBarrier.srcQueueFamilyIndex =
+                    vkContext->computeQueueFamilyIndex;
 
-                0,
-                nullptr);
+                bufferBarrier.dstQueueFamilyIndex =
+                    vkContext->graphicsQueueFamilyIndex;
+
+                vkCmdPipelineBarrier(
+                    commandBuffer,
+                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                    0,
+                    0,
+                    nullptr,
+                    1,
+                    &bufferBarrier,
+                    0,
+                    nullptr);
+            }
+            else
+            {
+                bufferBarrier.srcAccessMask =
+                    VK_ACCESS_SHADER_WRITE_BIT;
+
+                bufferBarrier.dstAccessMask =
+                    VK_ACCESS_SHADER_READ_BIT;
+
+                bufferBarrier.srcQueueFamilyIndex =
+                    VK_QUEUE_FAMILY_IGNORED;
+
+                bufferBarrier.dstQueueFamilyIndex =
+                    VK_QUEUE_FAMILY_IGNORED;
+
+                vkCmdPipelineBarrier(
+                    commandBuffer,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                    0,
+                    0,
+                    nullptr,
+                    1,
+                    &bufferBarrier,
+                    0,
+                    nullptr);
+            }
         }
     }
 
@@ -502,6 +622,55 @@ void Renderer::render(ImGuiManager &imgui)
         commandBuffer,
         &renderingInfo);
         
+    if (fluidConfigured && fluidBuffer != nullptr)
+    {
+        vkCmdBindPipeline(
+            commandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            fluidGraphicsPipeline.handle);
+
+        vkCmdBindDescriptorSets(
+            commandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            fluidGraphicsPipeline.layout,
+            0,
+            1,
+            &fluidDescriptorSet[currentFrame],
+            0,
+            nullptr);
+
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(swapchain.extent.width);
+        viewport.height = static_cast<float>(swapchain.extent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+        VkRect2D scissor{};
+        scissor.offset = {0, 0};
+        scissor.extent = swapchain.extent;
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+        FluidRenderPushConstant push{};
+        push.screenWidth = static_cast<float>(swapchain.extent.width);
+        push.screenHeight = static_cast<float>(swapchain.extent.height);
+        push.simWidth = fluidSimWidth;
+        push.simHeight = fluidSimHeight;
+
+        vkCmdPushConstants(
+            commandBuffer,
+            fluidGraphicsPipeline.layout,
+            VK_SHADER_STAGE_VERTEX_BIT |
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            0,
+            sizeof(FluidRenderPushConstant),
+            &push);
+
+        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    }
+
     if (particlesConfigured &&
         particleBuffer != nullptr)
     {
@@ -594,7 +763,6 @@ void Renderer::render(ImGuiManager &imgui)
 
     imgui.render(commandBuffer);
 
-
     vkCmdEndRendering(
         commandBuffer);
 
@@ -624,7 +792,7 @@ void Renderer::render(ImGuiManager &imgui)
             computeFinishedSemaphore;
 
         waitStages[waitSemaphoreCount] =
-            VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+            VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 
         ++waitSemaphoreCount;
     }
@@ -731,6 +899,9 @@ void Renderer::destroy()
     particleGraphicsPipeline.destroy(
         vkContext->device);
 
+    fluidGraphicsPipeline.destroy(
+        vkContext->device);
+
     if (particleDescriptorPool != VK_NULL_HANDLE)
     {
         vkDestroyDescriptorPool(
@@ -742,6 +913,17 @@ void Renderer::destroy()
             VK_NULL_HANDLE;
     }
 
+    if (fluidDescriptorPool != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorPool(
+            vkContext->device,
+            fluidDescriptorPool,
+            nullptr);
+
+        fluidDescriptorPool =
+            VK_NULL_HANDLE;
+    }
+
     if (particleDescriptorSetLayout != VK_NULL_HANDLE)
     {
         vkDestroyDescriptorSetLayout(
@@ -750,6 +932,17 @@ void Renderer::destroy()
             nullptr);
 
         particleDescriptorSetLayout =
+            VK_NULL_HANDLE;
+    }
+
+    if (fluidDescriptorSetLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorSetLayout(
+            vkContext->device,
+            fluidDescriptorSetLayout,
+            nullptr);
+
+        fluidDescriptorSetLayout =
             VK_NULL_HANDLE;
     }
 
@@ -794,6 +987,12 @@ void Renderer::destroy()
     particleBuffer = nullptr;
     particleCount = 0;
     particlesConfigured = false;
+
+    fluidBuffer = nullptr;
+    fluidSimWidth = 0;
+    fluidSimHeight = 0;
+    fluidConfigured = false;
+    fluidDescriptorSet.clear();
 
     computeFinishedSemaphore =
         VK_NULL_HANDLE;

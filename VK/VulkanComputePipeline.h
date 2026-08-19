@@ -35,7 +35,8 @@ public:
         uint32_t groupCountZ,
         const void* pushConstantData,
         uint32_t pushConstantSize,
-        VkBuffer particleBuffer
+        VkBuffer particleBuffer,
+        uint32_t descriptorSetIndex = 0
     );
 
     void destroy(VkDevice device);
@@ -44,6 +45,13 @@ public:
     {
         return computeFinishedSemaphore;
     }
+
+        void setupPingPongDescriptors(
+    const VulkanContext& context,
+    const VulkanBuffer& bufferA,
+    const VulkanBuffer& bufferB
+    );
+
 
 private:
     std::vector<char> readFile(
@@ -69,8 +77,7 @@ private:
     VkDescriptorPool descriptorPool =
         VK_NULL_HANDLE;
 
-    VkDescriptorSet descriptorSet =
-        VK_NULL_HANDLE;
+    std::vector<VkDescriptorSet> descriptorSets;
 
     VkCommandPool commandPool =
         VK_NULL_HANDLE;

@@ -1,13 +1,12 @@
 #include "StartingScreen.h"
-
 #include <imgui.h>
 
 ControlMode StartingScreen::render()
 {
     ImGuiIO& io = ImGui::GetIO();
 
-    const float windowWidth = 360.0f;
-    const float windowHeight = 280.0f;
+    const float windowWidth = 380.0f;
+    const float windowHeight = 420.0f;
 
     ImGui::SetNextWindowPos(
         ImVec2(
@@ -23,7 +22,7 @@ ControlMode StartingScreen::render()
     );
 
     ImGui::Begin(
-        "Particle Simulation",
+        "Simulation Mode",
         nullptr,
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoCollapse |
@@ -31,50 +30,56 @@ ControlMode StartingScreen::render()
         ImGuiWindowFlags_NoSavedSettings
     );
 
-    ImGui::SetCursorPosY(35.0f);
+    ImGui::SetCursorPosY(20.0f);
 
     const char* title = "SELECT CONTROL MODE";
+    float titleWidth = ImGui::CalcTextSize(title).x;
 
-    float titleWidth =
-        ImGui::CalcTextSize(title).x;
-
-    ImGui::SetCursorPosX(
-        (windowWidth - titleWidth) * 0.5f
-    );
-
+    ImGui::SetCursorPosX((windowWidth - titleWidth) * 0.5f);
     ImGui::TextUnformatted(title);
 
     ImGui::Spacing();
     ImGui::Spacing();
-    ImGui::Spacing();
 
-    constexpr float buttonWidth = 220.0f;
-    constexpr float buttonHeight = 55.0f;
+    constexpr float buttonWidth = 260.0f;
+    constexpr float buttonHeight = 48.0f;
 
-    ImGui::SetCursorPosX(
-        (windowWidth - buttonWidth) * 0.5f
-    );
-
-    if (ImGui::Button(
-        "MOUSE",
-        ImVec2(buttonWidth, buttonHeight)
-    ))
+    ImGui::SetCursorPosX((windowWidth - buttonWidth) * 0.5f);
+    if (ImGui::Button("MOUSE PARTICLES", ImVec2(buttonWidth, buttonHeight)))
     {
-        selectedMode = ControlMode::Mouse;
+        selectedMode = ControlMode::MouseParticles;
     }
 
     ImGui::Spacing();
 
-    ImGui::SetCursorPosX(
-        (windowWidth - buttonWidth) * 0.5f
-    );
-
-    if (ImGui::Button(
-        "MUSIC",
-        ImVec2(buttonWidth, buttonHeight)
-    ))
+    ImGui::SetCursorPosX((windowWidth - buttonWidth) * 0.5f);
+    if (ImGui::Button("MUSIC PARTICLES", ImVec2(buttonWidth, buttonHeight)))
     {
-        selectedMode = ControlMode::Music;
+        selectedMode = ControlMode::MusicParticles;
+    }
+
+    ImGui::Spacing();
+
+    ImGui::SetCursorPosX((windowWidth - buttonWidth) * 0.5f);
+    if (ImGui::Button("FLUID MOUSE", ImVec2(buttonWidth, buttonHeight)))
+    {
+        selectedMode = ControlMode::FluidMouse;
+    }
+
+    ImGui::Spacing();
+
+    ImGui::SetCursorPosX((windowWidth - buttonWidth) * 0.5f);
+    if (ImGui::Button("FLUID PARTICLES", ImVec2(buttonWidth, buttonHeight)))
+    {
+        selectedMode = ControlMode::FluidParticles;
+    }
+
+    ImGui::Spacing();
+
+    ImGui::SetCursorPosX((windowWidth - buttonWidth) * 0.5f);
+    if (ImGui::Button("FLUID PARTICLES MUSIC", ImVec2(buttonWidth, buttonHeight)))
+    {
+        selectedMode = ControlMode::FluidParticlesMusic;
     }
 
     ImGui::End();

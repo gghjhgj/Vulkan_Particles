@@ -3,8 +3,11 @@
 enum class ControlMode
 {
     None,
-    Mouse,
-    Music
+    MouseParticles,
+    MusicParticles,
+    FluidMouse,
+    FluidParticles,
+    FluidParticlesMusic
 };
 
 class StartingScreen
@@ -13,6 +16,5 @@ public:
     ControlMode render();
 
 private:
-    ControlMode selectedMode =
-        ControlMode::None;
+    ControlMode selectedMode = ControlMode::None;
 };

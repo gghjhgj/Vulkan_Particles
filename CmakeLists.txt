@@ -542,9 +542,20 @@ if(BUILD_SHADERS)
     message(STATUS "Searching GLSL shaders")
     message(STATUS "================================================")
 
-    file(GLOB SHADER_SOURCES
+    # Szukanie wszystkich plikow z typowymi rozszerzeniami shaderow
+    file(GLOB_RECURSE SHADER_SOURCES
         CONFIGURE_DEPENDS
         "${PROJECT_SOURCE_DIR}/shaders/*.glsl"
+        "${PROJECT_SOURCE_DIR}/shaders/*.vert"
+        "${PROJECT_SOURCE_DIR}/shaders/*.frag"
+        "${PROJECT_SOURCE_DIR}/shaders/*.comp"
+        "${PROJECT_SOURCE_DIR}/shaders/*.geom"
+        "${PROJECT_SOURCE_DIR}/shaders/*.tesc"
+        "${PROJECT_SOURCE_DIR}/shaders/*.tese"
+        "${PROJECT_SOURCE_DIR}/shaders/*.rgen"
+        "${PROJECT_SOURCE_DIR}/shaders/*.rmiss"
+        "${PROJECT_SOURCE_DIR}/shaders/*.rchit"
+        "${PROJECT_SOURCE_DIR}/shaders/*.rahit"
     )
 
     set(SHADER_OUTPUTS)
@@ -558,58 +569,92 @@ if(BUILD_SHADERS)
         )
 
         # ------------------------------------------------------------
-        # Detect shader stage
+        # Detect shader stage (obsluguje np. fluid.comp, fluid.comp.glsl, fluid_comp.glsl)
         # ------------------------------------------------------------
 
-        if(SHADER_NAME MATCHES "_vert\\.glsl$")
+        if(SHADER_NAME MATCHES "[._]vert(\\.[^.]*)?$")
 
             set(SHADER_STAGE vertex)
 
-        elseif(SHADER_NAME MATCHES "_frag\\.glsl$")
+        elseif(SHADER_NAME MATCHES "[._]frag(\\.[^.]*)?$")
 
             set(SHADER_STAGE fragment)
 
-        elseif(SHADER_NAME MATCHES "_comp\\.glsl$")
+        elseif(SHADER_NAME MATCHES "[._]comp(\\.[^.]*)?$")
 
             set(SHADER_STAGE compute)
+
+        elseif(SHADER_NAME MATCHES "[._]geom(\\.[^.]*)?$")
+
+            set(SHADER_STAGE geometry)
+
+        elseif(SHADER_NAME MATCHES "[._]tesc(\\.[^.]*)?$")
+
+            set(SHADER_STAGE tesscontrol)
+
+        elseif(SHADER_NAME MATCHES "[._]tese(\\.[^.]*)?$")
+
+            set(SHADER_STAGE tesseval)
+
+        elseif(SHADER_NAME MATCHES "[._]rgen(\\.[^.]*)?$")
+
+            set(SHADER_STAGE rgen)
+
+        elseif(SHADER_NAME MATCHES "[._]rmiss(\\.[^.]*)?$")
+
+            set(SHADER_STAGE rmiss)
+
+        elseif(SHADER_NAME MATCHES "[._]rchit(\\.[^.]*)?$")
+
+            set(SHADER_STAGE rchit)
+
+        elseif(SHADER_NAME MATCHES "[._]rahit(\\.[^.]*)?$")
+
+            set(SHADER_STAGE rahit)
 
         else()
 
-            message(WARNING
-                "Unknown shader stage for ${SHADER_NAME}. "
-                "Assuming compute."
-            )
-
-            set(SHADER_STAGE compute)
+            # Pliki bez okreslonego etapu (np. particle.glsl, struct.glsl) sa pomijane
+            continue()
 
         endif()
 
         # ------------------------------------------------------------
-        # Output filename
+        # Output filename & relative paths
         # ------------------------------------------------------------
 
-        string(
-            REGEX REPLACE
-            "\\.glsl$"
-            ".spv"
-            SHADER_OUTPUT_NAME
-            "${SHADER_NAME}"
+        file(RELATIVE_PATH
+            REL_PATH
+            "${PROJECT_SOURCE_DIR}/shaders"
+            "${SHADER}"
         )
 
-        # ------------------------------------------------------------
-        # BUILD output
-        # ------------------------------------------------------------
+        # Jesli plik konczy sie na .glsl, podmieniamy .glsl na .spv (np. fluid.comp.glsl -> fluid.comp.spv)
+        # Jesli konczy sie na np. .comp, dopisujemy .spv (np. fluid.comp -> fluid.comp.spv)
+        if(REL_PATH MATCHES "\\.glsl$")
+            string(
+                REGEX REPLACE
+                "\\.glsl$"
+                ".spv"
+                REL_SPV_PATH
+                "${REL_PATH}"
+            )
+        else()
+            set(REL_SPV_PATH "${REL_PATH}.spv")
+        endif()
 
         set(BUILD_SPV
-            "${CMAKE_BINARY_DIR}/bin/shaders/${SHADER_OUTPUT_NAME}"
+            "${CMAKE_BINARY_DIR}/bin/shaders/${REL_SPV_PATH}"
         )
 
-        # ------------------------------------------------------------
-        # SOURCE output
-        # ------------------------------------------------------------
-
         set(SOURCE_SPV
-            "${PROJECT_SOURCE_DIR}/shaders/${SHADER_OUTPUT_NAME}"
+            "${PROJECT_SOURCE_DIR}/shaders/${REL_SPV_PATH}"
+        )
+
+        get_filename_component(
+            BUILD_SPV_DIR
+            "${BUILD_SPV}"
+            DIRECTORY
         )
 
         # ------------------------------------------------------------
@@ -623,11 +668,12 @@ if(BUILD_SHADERS)
             COMMAND
                 ${CMAKE_COMMAND}
                 -E make_directory
-                "${CMAKE_BINARY_DIR}/bin/shaders"
+                "${BUILD_SPV_DIR}"
 
             COMMAND
                 "${GLSLC_EXECUTABLE}"
                 "-fshader-stage=${SHADER_STAGE}"
+                "-I" "${PROJECT_SOURCE_DIR}/shaders"
                 "${SHADER}"
                 "-o"
                 "${BUILD_SPV}"
@@ -642,7 +688,7 @@ if(BUILD_SHADERS)
                 "${SHADER}"
 
             COMMENT
-                "GLSLC ${SHADER_STAGE}: ${SHADER_NAME}"
+                "GLSLC ${SHADER_STAGE}: ${REL_PATH}"
 
             VERBATIM
         )
@@ -653,7 +699,7 @@ if(BUILD_SHADERS)
         )
 
         message(STATUS
-            "  ${SHADER_NAME} -> ${SHADER_STAGE}"
+            "  ${REL_PATH} -> ${SHADER_STAGE} (${REL_SPV_PATH})"
         )
 
     endforeach()
@@ -662,13 +708,15 @@ if(BUILD_SHADERS)
     # Shader target
     # ------------------------------------------------------------
 
-    add_custom_target(shader
-        ALL
-        DEPENDS
-            ${SHADER_OUTPUTS}
-    )
+    if(SHADER_OUTPUTS)
+        add_custom_target(shader
+            ALL
+            DEPENDS
+                ${SHADER_OUTPUTS}
+        )
 
-    add_dependencies(app shader)
+        add_dependencies(app shader)
+    endif()
 
 endif()
 

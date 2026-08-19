@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RGB.h"
+#include "../RGBA.h"
 struct Particle
 {
     float x;
@@ -12,5 +12,5 @@ struct Particle
     float vx;
     float vy; 
 
-    RGB color;
+    RGBA color;
 };

@@ -1,10 +1,10 @@
 #pragma once
 
-#include "RGB.h"
+#include "../RGBA.h"
 #include "Particle.h"
-#include "../Config/Config.h"
-#include "../VK/VulkanBuffer.h"
-#include "../VK/VulkanComputePipeline.h"
+#include "../../Config/Config.h"
+#include "../../VK/VulkanBuffer.h"
+#include "../../VK/VulkanComputePipeline.h"
 
 #include <vulkan/vulkan.h>
 #include <vector>

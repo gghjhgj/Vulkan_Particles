@@ -4,231 +4,116 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
 #include <type_traits>
+#include <unordered_map>
 
 WindowConfig Config::window;
 ParticlesConfig Config::particles;
+FluidConfig Config::fluid;
 
-namespace
-{
-using Section = std::unordered_map<std::string, std::string>;
-using IniData = std::unordered_map<std::string, Section>;
+namespace {
+    using Section = std::unordered_map<std::string, std::string>;
+    using IniData = std::unordered_map<std::string, Section>;
 
-std::string trim(const std::string& str)
-{
-    const auto first =
-        str.find_first_not_of(" \t\r\n");
+    std::string trim(const std::string& str) {
+        const auto first = str.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos)
+            return {};
 
-    if (first == std::string::npos)
-        return {};
-
-    const auto last =
-        str.find_last_not_of(" \t\r\n");
-
-    return str.substr(
-        first,
-        last - first + 1
-    );
-}
-
-IniData parseIni(const std::string& path)
-{
-    std::ifstream file(path);
-
-    if (!file)
-    {
-        throw std::runtime_error(
-            "Failed to open configuration file: " + path
-        );
+        const auto last = str.find_last_not_of(" \t\r\n");
+        return str.substr(first, last - first + 1);
     }
 
-    IniData data;
-
-    std::string line;
-    std::string currentSection;
-
-    while (std::getline(file, line))
-    {
-        line = trim(line);
-
-        if (line.empty() ||
-            line[0] == '#' ||
-            line[0] == ';')
-        {
-            continue;
+    IniData parseIni(const std::string& path) {
+        std::ifstream file(path);
+        if (!file) {
+            throw std::runtime_error("Failed to open configuration file: " + path);
         }
 
-        if (line.front() == '[' &&
-            line.back() == ']')
-        {
-            currentSection =
-                trim(
-                    line.substr(
-                        1,
-                        line.size() - 2
-                    )
-                );
+        IniData data;
+        std::string line;
+        std::string currentSection;
 
-            continue;
+        while (std::getline(file, line)) {
+            line = trim(line);
+
+            if (line.empty() || line[0] == '#' || line[0] == ';')
+                continue;
+
+            if (line.front() == '[' && line.back() == ']') {
+                currentSection = trim(line.substr(1, line.size() - 2));
+                continue;
+            }
+
+            const auto separator = line.find('=');
+            if (separator == std::string::npos) {
+                throw std::runtime_error("Invalid configuration line: " + line);
+            }
+
+            const std::string key = trim(line.substr(0, separator));
+            std::string value = trim(line.substr(separator + 1));
+
+            const auto comment = value.find_first_of("#;");
+            if (comment != std::string::npos) {
+                value = trim(value.substr(0, comment));
+            }
+
+            data[currentSection][key] = value;
         }
 
-        const auto separator =
-            line.find('=');
-
-        if (separator == std::string::npos)
-        {
-            throw std::runtime_error(
-                "Invalid configuration line: " + line
-            );
-        }
-
-        const std::string key =
-            trim(
-                line.substr(
-                    0,
-                    separator
-                )
-            );
-
-        std::string value =
-            trim(
-                line.substr(
-                    separator + 1
-                )
-            );
-
-        const auto comment =
-            value.find_first_of("#;");
-
-        if (comment != std::string::npos)
-        {
-            value =
-                trim(
-                    value.substr(
-                        0,
-                        comment
-                    )
-                );
-        }
-
-        data[currentSection][key] = value;
+        return data;
     }
 
-    return data;
-}
-
-template <typename T>
-T get(
-    const IniData& data,
-    const std::string& section,
-    const std::string& key)
-{
-    const auto sectionIt =
-        data.find(section);
-
-    if (sectionIt == data.end())
-    {
-        throw std::runtime_error(
-            "Missing configuration section [" +
-            section +
-            "]"
-        );
-    }
-
-    const auto valueIt =
-        sectionIt->second.find(key);
-
-    if (valueIt == sectionIt->second.end())
-    {
-        throw std::runtime_error(
-            "Missing configuration value: [" +
-            section +
-            "] " +
-            key
-        );
-    }
-
-    if constexpr (std::is_same_v<T, std::string>)
-    {
-        return valueIt->second;
-    }
-    else
-    {
-        std::stringstream stream(
-            valueIt->second
-        );
-
-        T value{};
-
-        if constexpr (std::is_same_v<T, bool>)
-        {
-            stream >> std::boolalpha >> value;
-        }
-        else
-        {
-            stream >> value;
+    template <typename T>
+    T get(const IniData& data, const std::string& section, const std::string& key) {
+        const auto sectionIt = data.find(section);
+        if (sectionIt == data.end()) {
+            throw std::runtime_error("Missing configuration section [" + section + "]");
         }
 
-        if (stream.fail())
-        {
-            throw std::runtime_error(
-                "Invalid value for [" +
-                section +
-                "] " +
-                key +
-                ": " +
-                valueIt->second
-            );
+        const auto valueIt = sectionIt->second.find(key);
+        if (valueIt == sectionIt->second.end()) {
+            throw std::runtime_error("Missing configuration value: [" + section + "] " + key);
         }
 
-        return value;
+        if constexpr (std::is_same_v<T, std::string>) {
+            return valueIt->second;
+        } else {
+            std::stringstream stream(valueIt->second);
+            T value{};
+
+            if constexpr (std::is_same_v<T, bool>) {
+                stream >> std::boolalpha >> value;
+            } else {
+                stream >> value;
+            }
+
+            if (stream.fail()) {
+                throw std::runtime_error("Invalid value for [" + section + "] " + key + ": " + valueIt->second);
+            }
+
+            return value;
+        }
     }
 }
 
-}
+void Config::load(const std::string& path) {
+    const IniData ini = parseIni(path);
 
-void Config::load(const std::string& path)
-{
-    const IniData ini =
-        parseIni(path);
+    window.width = get<int>(ini, "window", "width");
+    window.height = get<int>(ini, "window", "height");
 
-    window.width =
-        get<int>(
-            ini,
-            "window",
-            "width"
-        );
+    particles.count = get<uint32_t>(ini, "particles", "count");
+    particles.trail_length = get<float>(ini, "particles", "trail_length");
+    particles.trail_width = get<float>(ini, "particles", "trail_width");
+    particles.size = get<float>(ini, "particles", "size");
 
-    window.height =
-        get<int>(
-            ini,
-            "window",
-            "height"
-        );
-
-    particles.count =
-        get<uint32_t>(
-            ini,
-            "particles",
-            "count"
-        );
-    particles.trail_length =
-        get<float>(
-            ini,
-            "particles",
-            "trail_length"
-        );
-    particles.trail_width =
-        get<float>(
-            ini,
-            "particles",
-            "trail_width"
-        );
-    particles.size =
-        get<float>(
-            ini,
-            "particles",
-            "size"
-        );
+    fluid.simWidth = get<uint32_t>(ini, "fluid", "sim_width");
+    fluid.simHeight = get<uint32_t>(ini, "fluid", "sim_height");
+    fluid.velocityDissipation = get<float>(ini, "fluid", "velocity_dissipation");
+    fluid.densityDissipation = get<float>(ini, "fluid", "density_dissipation");
+    fluid.vorticity = get<float>(ini, "fluid", "vorticity");
+    fluid.pressureIterations = get<uint32_t>(ini, "fluid", "pressure_iterations");
+    fluid.splatRadius = get<float>(ini, "fluid", "splat_radius");
+    fluid.splatForce = get<float>(ini, "fluid", "splat_force");
 }

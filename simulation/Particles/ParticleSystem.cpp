@@ -1,5 +1,5 @@
 #include "ParticleSystem.h"
-#include "../VK/VulkanContext.h"
+#include "../../VK/VulkanContext.h"
 
 void ParticleSystem::init(
     VulkanContext& context,
@@ -32,10 +32,11 @@ void ParticleSystem::init(
         particles[i].vx = distVelocity(gen);
         particles[i].vy = distVelocity(gen);
 
-        particles[i].color = RGB(
+        particles[i].color = RGBA(
             static_cast<uint8_t>(distColor(gen)),
             static_cast<uint8_t>(distColor(gen)),
-            static_cast<uint8_t>(distColor(gen))
+            static_cast<uint8_t>(distColor(gen)),
+                                (uint8_t)255
         );
     }
 
