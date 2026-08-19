@@ -338,7 +338,8 @@ void VulkanComputePipeline::dispatch(
     const void *pushConstantData,
     uint32_t pushConstantSize,
     VkBuffer syncBuffer,
-    uint32_t descriptorSetIndex)
+    uint32_t descriptorSetIndex,
+    VkSemaphore waitSemaphore)
 {
     if (vkWaitForFences(
             context.device,
@@ -391,43 +392,46 @@ void VulkanComputePipeline::dispatch(
 
     vkCmdDispatch(commandBuffer, groupCountX, groupCountY, groupCountZ);
 
-    VkBufferMemoryBarrier bufferBarrier{};
-    bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-    bufferBarrier.buffer = syncBuffer;
-    bufferBarrier.offset = 0;
-    bufferBarrier.size = VK_WHOLE_SIZE;
-
-    if (context.computeQueueFamilyIndex != context.graphicsQueueFamilyIndex)
+    if (syncBuffer != VK_NULL_HANDLE)
     {
-        bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        bufferBarrier.dstAccessMask = 0;
-        bufferBarrier.srcQueueFamilyIndex = context.computeQueueFamilyIndex;
-        bufferBarrier.dstQueueFamilyIndex = context.graphicsQueueFamilyIndex;
+        VkBufferMemoryBarrier bufferBarrier{};
+        bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        bufferBarrier.buffer = syncBuffer;
+        bufferBarrier.offset = 0;
+        bufferBarrier.size = VK_WHOLE_SIZE;
 
-        vkCmdPipelineBarrier(
-            commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-            0,
-            0, nullptr,
-            1, &bufferBarrier,
-            0, nullptr);
-    }
-    else
-    {
-        bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        if (context.computeQueueFamilyIndex != context.graphicsQueueFamilyIndex)
+        {
+            bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            bufferBarrier.dstAccessMask = 0;
+            bufferBarrier.srcQueueFamilyIndex = context.computeQueueFamilyIndex;
+            bufferBarrier.dstQueueFamilyIndex = context.graphicsQueueFamilyIndex;
 
-        vkCmdPipelineBarrier(
-            commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            0,
-            0, nullptr,
-            1, &bufferBarrier,
-            0, nullptr);
+            vkCmdPipelineBarrier(
+                commandBuffer,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                0,
+                0, nullptr,
+                1, &bufferBarrier,
+                0, nullptr);
+        }
+        else
+        {
+            bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+            vkCmdPipelineBarrier(
+                commandBuffer,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0,
+                0, nullptr,
+                1, &bufferBarrier,
+                0, nullptr);
+        }
     }
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
@@ -435,8 +439,24 @@ void VulkanComputePipeline::dispatch(
         throw std::runtime_error("error: couldn't end compute command buffer");
     }
 
+    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    if (waitSemaphore != VK_NULL_HANDLE)
+    {
+        submitInfo.waitSemaphoreCount = 1;
+        submitInfo.pWaitSemaphores = &waitSemaphore;
+        submitInfo.pWaitDstStageMask = &waitStage;
+    }
+    else
+    {
+        submitInfo.waitSemaphoreCount = 0;
+        submitInfo.pWaitSemaphores = nullptr;
+        submitInfo.pWaitDstStageMask = nullptr;
+    }
+
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffer;
     submitInfo.signalSemaphoreCount = 1;

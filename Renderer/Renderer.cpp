@@ -45,8 +45,7 @@ void Renderer::init(
 
     if (windowSize.x == 0 || windowSize.y == 0)
     {
-        throw std::runtime_error(
-            "Window has zero size.");
+        throw std::runtime_error("Window has zero size.");
     }
 
     swapchain.init(
@@ -70,9 +69,7 @@ void Renderer::init(
         swapchain.images.size());
 
     VkSemaphoreCreateInfo semaphoreInfo{};
-
-    semaphoreInfo.sType =
-        VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
     for (auto &semaphore : renderFinishedSemaphores)
     {
@@ -82,8 +79,7 @@ void Renderer::init(
                 nullptr,
                 &semaphore) != VK_SUCCESS)
         {
-            throw std::runtime_error(
-                "Failed to create render finished semaphore.");
+            throw std::runtime_error("Failed to create render finished semaphore.");
         }
     }
 
@@ -102,79 +98,41 @@ void Renderer::init(
         << " x "
         << swapchain.extent.height
         << '\n';
-
-    std::cout
-        << "Swapchain images: "
-        << swapchain.images.size()
-        << '\n';
-
-    std::cout
-        << "Graphics queue family: "
-        << vkContext->graphicsQueueFamilyIndex
-        << '\n';
-
-    std::cout
-        << "Compute queue family: "
-        << vkContext->computeQueueFamilyIndex
-        << '\n';
 }
 
 void Renderer::createSurface(sf::Window &window)
 {
 #ifdef _WIN32
-
     VkWin32SurfaceCreateInfoKHR surfaceCreateInfo{};
+    surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    surfaceCreateInfo.hwnd = reinterpret_cast<HWND>(window.getNativeHandle());
+    surfaceCreateInfo.hinstance = GetModuleHandle(nullptr);
 
-    surfaceCreateInfo.sType =
-        VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-
-    surfaceCreateInfo.hwnd =
-        reinterpret_cast<HWND>(
-            window.getNativeHandle());
-
-    surfaceCreateInfo.hinstance =
-        GetModuleHandle(nullptr);
-
-    VkResult result =
-        vkCreateWin32SurfaceKHR(
-            vkContext->instance,
-            &surfaceCreateInfo,
-            nullptr,
-            &surface);
+    VkResult result = vkCreateWin32SurfaceKHR(
+        vkContext->instance,
+        &surfaceCreateInfo,
+        nullptr,
+        &surface);
 
     if (result != VK_SUCCESS)
     {
-        throw std::runtime_error(
-            "Failed to create Vulkan Win32 surface.");
+        throw std::runtime_error("Failed to create Vulkan Win32 surface.");
     }
-
 #else
-
-    throw std::runtime_error(
-        "This renderer currently supports Windows only.");
-
+    throw std::runtime_error("This renderer currently supports Windows only.");
 #endif
 }
 
 void Renderer::createParticlePipeline()
 {
     VkDescriptorSetLayoutBinding binding{};
-
     binding.binding = 0;
-
-    binding.descriptorType =
-        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     binding.descriptorCount = 1;
-
-    binding.stageFlags =
-        VK_SHADER_STAGE_VERTEX_BIT;
+    binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
-
-    layoutInfo.sType =
-        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.bindingCount = 1;
     layoutInfo.pBindings = &binding;
 
@@ -184,13 +142,10 @@ void Renderer::createParticlePipeline()
             nullptr,
             &particleDescriptorSetLayout) != VK_SUCCESS)
     {
-        throw std::runtime_error(
-            "Failed to create particle descriptor set layout.");
+        throw std::runtime_error("Failed to create particle descriptor set layout.");
     }
 
-    std::vector<VkDescriptorSetLayout> layouts =
-        {
-            particleDescriptorSetLayout};
+    std::vector<VkDescriptorSetLayout> layouts = { particleDescriptorSetLayout };
 
     particleGraphicsPipeline.init(
         *vkContext,
@@ -205,20 +160,14 @@ void Renderer::createParticlePipeline()
 void Renderer::createParticleDescriptors()
 {
     VkDescriptorPoolSize poolSize{};
-
-    poolSize.type =
-        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-
-    poolSize.descriptorCount = 1;
+    poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    poolSize.descriptorCount = MAX_FRAMES_IN_FLIGHT;
 
     VkDescriptorPoolCreateInfo poolInfo{};
-
-    poolInfo.sType =
-        VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes = &poolSize;
-    poolInfo.maxSets = 1;
+    poolInfo.maxSets = MAX_FRAMES_IN_FLIGHT;
 
     if (vkCreateDescriptorPool(
             vkContext->device,
@@ -226,30 +175,25 @@ void Renderer::createParticleDescriptors()
             nullptr,
             &particleDescriptorPool) != VK_SUCCESS)
     {
-        throw std::runtime_error(
-            "Failed to create particle descriptor pool.");
+        throw std::runtime_error("Failed to create particle descriptor pool.");
     }
 
+    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, particleDescriptorSetLayout);
+
     VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = particleDescriptorPool;
+    allocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+    allocInfo.pSetLayouts = layouts.data();
 
-    allocInfo.sType =
-        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-
-    allocInfo.descriptorPool =
-        particleDescriptorPool;
-
-    allocInfo.descriptorSetCount = 1;
-
-    allocInfo.pSetLayouts =
-        &particleDescriptorSetLayout;
+    particleDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 
     if (vkAllocateDescriptorSets(
             vkContext->device,
             &allocInfo,
-            &particleDescriptorSet) != VK_SUCCESS)
+            particleDescriptorSets.data()) != VK_SUCCESS)
     {
-        throw std::runtime_error(
-            "Failed to allocate particle descriptor set.");
+        throw std::runtime_error("Failed to allocate particle descriptor sets.");
     }
 }
 
@@ -259,43 +203,6 @@ void Renderer::setParticleBuffer(
 {
     particleBuffer = &buffer;
     particleCount = count;
-
-    VkDescriptorBufferInfo bufferInfo{};
-
-    bufferInfo.buffer =
-        buffer.handle;
-
-    bufferInfo.offset = 0;
-
-    bufferInfo.range =
-        buffer.size;
-
-    VkWriteDescriptorSet write{};
-
-    write.sType =
-        VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-
-    write.dstSet =
-        particleDescriptorSet;
-
-    write.dstBinding = 0;
-    write.dstArrayElement = 0;
-
-    write.descriptorType =
-        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-
-    write.descriptorCount = 1;
-
-    write.pBufferInfo =
-        &bufferInfo;
-
-    vkUpdateDescriptorSets(
-        vkContext->device,
-        1,
-        &write,
-        0,
-        nullptr);
-
     particlesConfigured = true;
 }
 
@@ -390,21 +297,18 @@ void Renderer::render(ImGuiManager &imgui)
     if (!initialized)
         return;
 
-    VulkanFrameData &frame =
-        frames[currentFrame];
+    VulkanFrameData &frame = frames[currentFrame];
 
-    VkResult result =
-        vkWaitForFences(
-            vkContext->device,
-            1,
-            &frame.inFlightFence,
-            VK_TRUE,
-            UINT64_MAX);
+    VkResult result = vkWaitForFences(
+        vkContext->device,
+        1,
+        &frame.inFlightFence,
+        VK_TRUE,
+        UINT64_MAX);
 
     if (result != VK_SUCCESS)
     {
-        throw std::runtime_error(
-            "Failed to wait for frame fence.");
+        throw std::runtime_error("Failed to wait for frame fence.");
     }
 
     if (fluidConfigured && fluidBuffer != nullptr)
@@ -431,56 +335,63 @@ void Renderer::render(ImGuiManager &imgui)
             nullptr);
     }
 
+    if (particlesConfigured && particleBuffer != nullptr)
+    {
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = particleBuffer->handle;
+        bufferInfo.offset = 0;
+        bufferInfo.range = particleBuffer->size;
+
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = particleDescriptorSets[currentFrame];
+        write.dstBinding = 0;
+        write.dstArrayElement = 0;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write.descriptorCount = 1;
+        write.pBufferInfo = &bufferInfo;
+
+        vkUpdateDescriptorSets(
+            vkContext->device,
+            1,
+            &write,
+            0,
+            nullptr);
+    }
+
     uint32_t imageIndex = 0;
 
-    result =
-        vkAcquireNextImageKHR(
-            vkContext->device,
-            swapchain.handle,
-            UINT64_MAX,
-            frame.imageAvailableSemaphore,
-            VK_NULL_HANDLE,
-            &imageIndex);
+    result = vkAcquireNextImageKHR(
+        vkContext->device,
+        swapchain.handle,
+        UINT64_MAX,
+        frame.imageAvailableSemaphore,
+        VK_NULL_HANDLE,
+        &imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
         return;
 
-    if (result != VK_SUCCESS &&
-        result != VK_SUBOPTIMAL_KHR)
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
     {
-        throw std::runtime_error(
-            "Failed to acquire swapchain image.");
+        throw std::runtime_error("Failed to acquire swapchain image.");
     }
 
-    VkSemaphore renderFinishedSemaphore =
-        renderFinishedSemaphores[imageIndex];
+    VkSemaphore renderFinishedSemaphore = renderFinishedSemaphores[imageIndex];
 
-    vkResetFences(
-        vkContext->device,
-        1,
-        &frame.inFlightFence);
+    vkResetFences(vkContext->device, 1, &frame.inFlightFence);
 
-    VkCommandBuffer commandBuffer =
-        frame.commandBuffer;
+    VkCommandBuffer commandBuffer = frame.commandBuffer;
 
-    vkResetCommandBuffer(
-        commandBuffer,
-        0);
+    vkResetCommandBuffer(commandBuffer, 0);
 
     VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    beginInfo.sType =
-        VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-    beginInfo.flags =
-        VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    if (vkBeginCommandBuffer(
-            commandBuffer,
-            &beginInfo) != VK_SUCCESS)
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
     {
-        throw std::runtime_error(
-            "Failed to begin command buffer.");
+        throw std::runtime_error("Failed to begin command buffer.");
     }
 
     if (computeFinishedSemaphore != VK_NULL_HANDLE)
@@ -502,31 +413,17 @@ void Renderer::render(ImGuiManager &imgui)
         if (syncBufferHandle != VK_NULL_HANDLE)
         {
             VkBufferMemoryBarrier bufferBarrier{};
-
-            bufferBarrier.sType =
-                VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-
-            bufferBarrier.buffer =
-                syncBufferHandle;
-
+            bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+            bufferBarrier.buffer = syncBufferHandle;
             bufferBarrier.offset = 0;
+            bufferBarrier.size = syncBufferSize;
 
-            bufferBarrier.size =
-                syncBufferSize;
-
-            if (vkContext->computeQueueFamilyIndex !=
-                vkContext->graphicsQueueFamilyIndex)
+            if (vkContext->computeQueueFamilyIndex != vkContext->graphicsQueueFamilyIndex)
             {
                 bufferBarrier.srcAccessMask = 0;
-
-                bufferBarrier.dstAccessMask =
-                    VK_ACCESS_SHADER_READ_BIT;
-
-                bufferBarrier.srcQueueFamilyIndex =
-                    vkContext->computeQueueFamilyIndex;
-
-                bufferBarrier.dstQueueFamilyIndex =
-                    vkContext->graphicsQueueFamilyIndex;
+                bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                bufferBarrier.srcQueueFamilyIndex = vkContext->computeQueueFamilyIndex;
+                bufferBarrier.dstQueueFamilyIndex = vkContext->graphicsQueueFamilyIndex;
 
                 vkCmdPipelineBarrier(
                     commandBuffer,
@@ -542,17 +439,10 @@ void Renderer::render(ImGuiManager &imgui)
             }
             else
             {
-                bufferBarrier.srcAccessMask =
-                    VK_ACCESS_SHADER_WRITE_BIT;
-
-                bufferBarrier.dstAccessMask =
-                    VK_ACCESS_SHADER_READ_BIT;
-
-                bufferBarrier.srcQueueFamilyIndex =
-                    VK_QUEUE_FAMILY_IGNORED;
-
-                bufferBarrier.dstQueueFamilyIndex =
-                    VK_QUEUE_FAMILY_IGNORED;
+                bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+                bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
                 vkCmdPipelineBarrier(
                     commandBuffer,
@@ -575,52 +465,25 @@ void Renderer::render(ImGuiManager &imgui)
         swapchainLayouts[imageIndex],
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    swapchainLayouts[imageIndex] =
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    swapchainLayouts[imageIndex] = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkRenderingAttachmentInfo colorAttachment{};
-
-    colorAttachment.sType =
-        VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-
-    colorAttachment.imageView =
-        swapchain.imageViews[imageIndex];
-
-    colorAttachment.imageLayout =
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    colorAttachment.loadOp =
-        VK_ATTACHMENT_LOAD_OP_CLEAR;
-
-    colorAttachment.storeOp =
-        VK_ATTACHMENT_STORE_OP_STORE;
-
-    colorAttachment.clearValue.color =
-        {{0.0f, 0.0f, 0.0f, 1.0f}};
+    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    colorAttachment.imageView = swapchain.imageViews[imageIndex];
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
     VkRenderingInfo renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderingInfo.renderArea.offset = {0, 0};
+    renderingInfo.renderArea.extent = swapchain.extent;
+    renderingInfo.layerCount = 1;
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &colorAttachment;
 
-    renderingInfo.sType =
-        VK_STRUCTURE_TYPE_RENDERING_INFO;
-
-    renderingInfo.renderArea.offset =
-        {0, 0};
-
-    renderingInfo.renderArea.extent =
-        swapchain.extent;
-
-    renderingInfo.layerCount =
-        1;
-
-    renderingInfo.colorAttachmentCount =
-        1;
-
-    renderingInfo.pColorAttachments =
-        &colorAttachment;
-
-    vkCmdBeginRendering(
-        commandBuffer,
-        &renderingInfo);
+    vkCmdBeginRendering(commandBuffer, &renderingInfo);
         
     if (fluidConfigured && fluidBuffer != nullptr)
     {
@@ -662,8 +525,7 @@ void Renderer::render(ImGuiManager &imgui)
         vkCmdPushConstants(
             commandBuffer,
             fluidGraphicsPipeline.layout,
-            VK_SHADER_STAGE_VERTEX_BIT |
-            VK_SHADER_STAGE_FRAGMENT_BIT,
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             0,
             sizeof(FluidRenderPushConstant),
             &push);
@@ -671,8 +533,7 @@ void Renderer::render(ImGuiManager &imgui)
         vkCmdDraw(commandBuffer, 3, 1, 0, 0);
     }
 
-    if (particlesConfigured &&
-        particleBuffer != nullptr)
+    if (particlesConfigured && particleBuffer != nullptr)
     {
         vkCmdBindPipeline(
             commandBuffer,
@@ -685,70 +546,35 @@ void Renderer::render(ImGuiManager &imgui)
             particleGraphicsPipeline.layout,
             0,
             1,
-            &particleDescriptorSet,
+            &particleDescriptorSets[currentFrame],
             0,
             nullptr);
 
         VkViewport viewport{};
-
         viewport.x = 0.0f;
         viewport.y = 0.0f;
-
-        viewport.width =
-            static_cast<float>(
-                swapchain.extent.width);
-
-        viewport.height =
-            static_cast<float>(
-                swapchain.extent.height);
-
+        viewport.width = static_cast<float>(swapchain.extent.width);
+        viewport.height = static_cast<float>(swapchain.extent.height);
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
-
-        vkCmdSetViewport(
-            commandBuffer,
-            0,
-            1,
-            &viewport);
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
         VkRect2D scissor{};
-
-        scissor.offset =
-            {0, 0};
-
-        scissor.extent =
-            swapchain.extent;
-
-        vkCmdSetScissor(
-            commandBuffer,
-            0,
-            1,
-            &scissor);
+        scissor.offset = {0, 0};
+        scissor.extent = swapchain.extent;
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
         ParticleRenderPushConstant push{};
-
-        push.width =
-            static_cast<float>(
-                swapchain.extent.width);
-
-        push.height =
-            static_cast<float>(
-                swapchain.extent.height);
-
-        push.size =
-            Config::particles.size;
-
-        push.trail_length =
-            Config::particles.trail_length;
-
-        push.trail_width =
-            Config::particles.trail_width;
+        push.width = static_cast<float>(swapchain.extent.width);
+        push.height = static_cast<float>(swapchain.extent.height);
+        push.size = Config::particles.size;
+        push.trail_length = Config::particles.trail_length;
+        push.trail_width = Config::particles.trail_width;
 
         vkCmdPushConstants(
             commandBuffer,
             particleGraphicsPipeline.layout,
-            VK_SHADER_STAGE_VERTEX_BIT |
-            VK_SHADER_STAGE_FRAGMENT_BIT,
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
             0,
             sizeof(ParticleRenderPushConstant),
             &push);
@@ -763,8 +589,7 @@ void Renderer::render(ImGuiManager &imgui)
 
     imgui.render(commandBuffer);
 
-    vkCmdEndRendering(
-        commandBuffer);
+    vkCmdEndRendering(commandBuffer);
 
     VulkanImageUtils::transitionImageLayout(
         commandBuffer,
@@ -772,214 +597,127 @@ void Renderer::render(ImGuiManager &imgui)
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-    swapchainLayouts[imageIndex] =
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    swapchainLayouts[imageIndex] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
     {
-        throw std::runtime_error(
-            "Failed to end command buffer.");
+        throw std::runtime_error("Failed to end command buffer.");
     }
 
     VkSemaphore waitSemaphores[2]{};
     VkPipelineStageFlags waitStages[2]{};
-
     uint32_t waitSemaphoreCount = 0;
 
     if (computeFinishedSemaphore != VK_NULL_HANDLE)
     {
-        waitSemaphores[waitSemaphoreCount] =
-            computeFinishedSemaphore;
-
-        waitStages[waitSemaphoreCount] =
-            VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-
+        waitSemaphores[waitSemaphoreCount] = computeFinishedSemaphore;
+        waitStages[waitSemaphoreCount] = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         ++waitSemaphoreCount;
     }
 
-    waitSemaphores[waitSemaphoreCount] =
-        frame.imageAvailableSemaphore;
-
-    waitStages[waitSemaphoreCount] =
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
+    waitSemaphores[waitSemaphoreCount] = frame.imageAvailableSemaphore;
+    waitStages[waitSemaphoreCount] = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     ++waitSemaphoreCount;
 
     VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.waitSemaphoreCount = waitSemaphoreCount;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = &renderFinishedSemaphore;
 
-    submitInfo.sType =
-        VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-    submitInfo.waitSemaphoreCount =
-        waitSemaphoreCount;
-
-    submitInfo.pWaitSemaphores =
-        waitSemaphores;
-
-    submitInfo.pWaitDstStageMask =
-        waitStages;
-
-    submitInfo.commandBufferCount =
-        1;
-
-    submitInfo.pCommandBuffers =
-        &commandBuffer;
-
-    submitInfo.signalSemaphoreCount =
-        1;
-
-    submitInfo.pSignalSemaphores =
-        &renderFinishedSemaphore;
-
-    result =
-        vkQueueSubmit(
-            vkContext->graphicsQueue,
-            1,
-            &submitInfo,
-            frame.inFlightFence);
+    result = vkQueueSubmit(
+        vkContext->graphicsQueue,
+        1,
+        &submitInfo,
+        frame.inFlightFence);
 
     if (result != VK_SUCCESS)
     {
-        throw std::runtime_error(
-            "Failed to submit graphics command buffer.");
+        throw std::runtime_error("Failed to submit graphics command buffer.");
     }
 
     VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &swapchain.handle;
+    presentInfo.pImageIndices = &imageIndex;
 
-    presentInfo.sType =
-        VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    result = vkQueuePresentKHR(vkContext->graphicsQueue, &presentInfo);
 
-    presentInfo.waitSemaphoreCount =
-        1;
-
-    presentInfo.pWaitSemaphores =
-        &renderFinishedSemaphore;
-
-    presentInfo.swapchainCount =
-        1;
-
-    presentInfo.pSwapchains =
-        &swapchain.handle;
-
-    presentInfo.pImageIndices =
-        &imageIndex;
-
-    result =
-        vkQueuePresentKHR(
-            vkContext->graphicsQueue,
-            &presentInfo);
-
-    if (result == VK_ERROR_OUT_OF_DATE_KHR ||
-        result == VK_SUBOPTIMAL_KHR)
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
     {
         return;
     }
 
     if (result != VK_SUCCESS)
     {
-        throw std::runtime_error(
-            "Failed to present swapchain image.");
+        throw std::runtime_error("Failed to present swapchain image.");
     }
 
-    currentFrame =
-        (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+    currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void Renderer::destroy()
 {
-    if (!vkContext)
+    if (!vkContext || vkContext->device == VK_NULL_HANDLE)
         return;
 
-    if (vkContext->device == VK_NULL_HANDLE)
-        return;
+    vkDeviceWaitIdle(vkContext->device);
 
-    vkDeviceWaitIdle(
-        vkContext->device);
-
-    particleGraphicsPipeline.destroy(
-        vkContext->device);
-
-    fluidGraphicsPipeline.destroy(
-        vkContext->device);
+    particleGraphicsPipeline.destroy(vkContext->device);
+    fluidGraphicsPipeline.destroy(vkContext->device);
 
     if (particleDescriptorPool != VK_NULL_HANDLE)
     {
-        vkDestroyDescriptorPool(
-            vkContext->device,
-            particleDescriptorPool,
-            nullptr);
-
-        particleDescriptorPool =
-            VK_NULL_HANDLE;
+        vkDestroyDescriptorPool(vkContext->device, particleDescriptorPool, nullptr);
+        particleDescriptorPool = VK_NULL_HANDLE;
     }
 
     if (fluidDescriptorPool != VK_NULL_HANDLE)
     {
-        vkDestroyDescriptorPool(
-            vkContext->device,
-            fluidDescriptorPool,
-            nullptr);
-
-        fluidDescriptorPool =
-            VK_NULL_HANDLE;
+        vkDestroyDescriptorPool(vkContext->device, fluidDescriptorPool, nullptr);
+        fluidDescriptorPool = VK_NULL_HANDLE;
     }
 
     if (particleDescriptorSetLayout != VK_NULL_HANDLE)
     {
-        vkDestroyDescriptorSetLayout(
-            vkContext->device,
-            particleDescriptorSetLayout,
-            nullptr);
-
-        particleDescriptorSetLayout =
-            VK_NULL_HANDLE;
+        vkDestroyDescriptorSetLayout(vkContext->device, particleDescriptorSetLayout, nullptr);
+        particleDescriptorSetLayout = VK_NULL_HANDLE;
     }
 
     if (fluidDescriptorSetLayout != VK_NULL_HANDLE)
     {
-        vkDestroyDescriptorSetLayout(
-            vkContext->device,
-            fluidDescriptorSetLayout,
-            nullptr);
-
-        fluidDescriptorSetLayout =
-            VK_NULL_HANDLE;
+        vkDestroyDescriptorSetLayout(vkContext->device, fluidDescriptorSetLayout, nullptr);
+        fluidDescriptorSetLayout = VK_NULL_HANDLE;
     }
 
     for (auto &frame : frames)
     {
-        frame.destroy(
-            vkContext->device);
+        frame.destroy(vkContext->device);
     }
-
     frames.clear();
 
-    for (VkSemaphore semaphore :
-         renderFinishedSemaphores)
+    for (VkSemaphore semaphore : renderFinishedSemaphores)
     {
         if (semaphore != VK_NULL_HANDLE)
         {
-            vkDestroySemaphore(
-                vkContext->device,
-                semaphore,
-                nullptr);
+            vkDestroySemaphore(vkContext->device, semaphore, nullptr);
         }
     }
-
     renderFinishedSemaphores.clear();
 
-    swapchain.destroy(
-        vkContext->device);
+    swapchain.destroy(vkContext->device);
 
     if (surface != VK_NULL_HANDLE)
     {
-        vkDestroySurfaceKHR(
-            vkContext->instance,
-            surface,
-            nullptr);
-
-        surface =
-            VK_NULL_HANDLE;
+        vkDestroySurfaceKHR(vkContext->instance, surface, nullptr);
+        surface = VK_NULL_HANDLE;
     }
 
     swapchainLayouts.clear();
@@ -987,6 +725,7 @@ void Renderer::destroy()
     particleBuffer = nullptr;
     particleCount = 0;
     particlesConfigured = false;
+    particleDescriptorSets.clear();
 
     fluidBuffer = nullptr;
     fluidSimWidth = 0;
@@ -994,10 +733,7 @@ void Renderer::destroy()
     fluidConfigured = false;
     fluidDescriptorSet.clear();
 
-    computeFinishedSemaphore =
-        VK_NULL_HANDLE;
-
+    computeFinishedSemaphore = VK_NULL_HANDLE;
     currentFrame = 0;
-
     initialized = false;
 }

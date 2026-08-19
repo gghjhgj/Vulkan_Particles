@@ -1,6 +1,7 @@
 #include "Renderer/Renderer.h"
 #include "Simulation/Particles/ParticleSystem.h"
 #include "Simulation/Fluids/FluidSystem.h"
+#include "Simulation/FluidParticles/FluidParticles.h"
 #include "Renderer/ImGuiManager.h"
 #include "Renderer/StartingScreen.h"
 #include "Config/Config.h"
@@ -57,6 +58,7 @@ int main()
         StartingScreen startingScreen;
         ParticleSystem particles;
         FluidSystem fluid;
+        FluidParticles fluidParticles;
 
         bool running = true;
         bool simulationStarted = false;
@@ -154,11 +156,42 @@ int main()
                     }
                     else if (controlMode == ControlMode::FluidParticles)
                     {
+                        fluid.init(
+                            vulkanContext,
+                            Config::fluid.simWidth,
+                            Config::fluid.simHeight,
+                            "shaders/fluids/fluid.comp.spv",
+                            sizeof(FluidPushConstants));
 
+                        particles.init(
+                            vulkanContext,
+                            Config::particles.count,
+                            Config::window.width,
+                            Config::window.height,
+                            "shaders/particles/particle.comp.spv",
+                            sizeof(ComputePush));
+
+                        fluidParticles.init(
+                            vulkanContext,
+                            particles,
+                            fluid,
+                            "shaders/fluidParticles/fluid_particles.comp.spv",
+                            sizeof(FluidPushConstants));
+
+                        renderer.setParticleBuffer(
+                            particles.getBuffer(),
+                            particles.getCount());
+
+                        renderer.setFluidBuffer(
+                            fluid.getActiveBuffer(),
+                            Config::fluid.simWidth,
+                            Config::fluid.simHeight);
+
+                        renderer.setComputeFinishedSemaphore(
+                            fluidParticles.getComputeFinishedSemaphore());
                     }
                     else if (controlMode == ControlMode::FluidParticlesMusic)
                     {
-
                     }
                 }
             }
@@ -213,17 +246,45 @@ int main()
                         fluid.getActiveBuffer(),
                         Config::fluid.simWidth,
                         Config::fluid.simHeight);
-
-                    renderer.setComputeFinishedSemaphore(
-                        fluid.getComputeFinishedSemaphore());
                 }
                 else if (controlMode == ControlMode::FluidParticles)
                 {
+                    FluidPushConstants push{};
+                    push.mouseX = static_cast<float>(mousePos.x);
+                    push.mouseY = static_cast<float>(mousePos.y);
+                    push.prevMouseX = static_cast<float>(lastMousePos.x);
+                    push.prevMouseY = static_cast<float>(lastMousePos.y);
+                    push.dt = dt;
+                    push.splatRadius = Config::fluid.splatRadius;
+                    push.splatForce = Config::fluid.splatForce;
+                    push.velocityDissipation = Config::fluid.velocityDissipation;
+                    push.densityDissipation = Config::fluid.densityDissipation;
+                    push.vorticity = Config::fluid.vorticity;
+                    push.windowWidth = Config::window.width;
+                    push.windowHeight = Config::window.height;
+                    push.simWidth = Config::fluid.simWidth;
+                    push.simHeight = Config::fluid.simHeight;
+                    push.isMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) ? 1 : 0;
 
+                    fluid.update(
+                        vulkanContext,
+                        &push,
+                        sizeof(FluidPushConstants));
+
+                    fluidParticles.update(
+                        vulkanContext,
+                        particles,
+                        fluid,
+                        &push,
+                        sizeof(FluidPushConstants));
+
+                    renderer.setFluidBuffer(
+                        fluid.getActiveBuffer(),
+                        Config::fluid.simWidth,
+                        Config::fluid.simHeight);
                 }
                 else if (controlMode == ControlMode::FluidParticlesMusic)
                 {
-
                 }
             }
 
@@ -242,11 +303,15 @@ int main()
         }
         else if (controlMode == ControlMode::FluidParticles)
         {
-
+            fluid.destroy(vulkanContext.device);
+            particles.destroy(vulkanContext.device);
+            fluidParticles.destroy(vulkanContext.device);
         }
         else if (controlMode == ControlMode::FluidParticlesMusic)
         {
-
+            fluid.destroy(vulkanContext.device);
+            particles.destroy(vulkanContext.device);
+            fluidParticles.destroy(vulkanContext.device);
         }
         else if (controlMode == ControlMode::MouseParticles || controlMode == ControlMode::MusicParticles)
         {

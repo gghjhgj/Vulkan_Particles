@@ -36,7 +36,8 @@ public:
         const void* pushConstantData,
         uint32_t pushConstantSize,
         VkBuffer particleBuffer,
-        uint32_t descriptorSetIndex = 0
+        uint32_t descriptorSetIndex = 0,
+        VkSemaphore waitSemaphore = VK_NULL_HANDLE
     );
 
     void destroy(VkDevice device);

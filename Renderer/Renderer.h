@@ -85,7 +85,7 @@ private:
     VulkanGraphicsPipeline particleGraphicsPipeline;
     VkDescriptorSetLayout particleDescriptorSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool particleDescriptorPool = VK_NULL_HANDLE;
-    VkDescriptorSet particleDescriptorSet = VK_NULL_HANDLE;
+    std::vector<VkDescriptorSet> particleDescriptorSets;
     const VulkanBuffer* particleBuffer = nullptr;
     uint32_t particleCount = 0;
     bool particlesConfigured = false;
