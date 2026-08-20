@@ -223,7 +223,8 @@ void FluidSystem::init(
 void FluidSystem::update(
     VulkanContext& context,
     const void* pushData,
-    uint32_t pushConstantSize
+    uint32_t pushConstantSize,
+    VkSemaphore waitSemaphore // <--- DODAJ TUTAJ
 )
 {
     constexpr uint32_t WORKGROUP_SIZE = 256;
@@ -311,10 +312,20 @@ void FluidSystem::update(
 
     vkEndCommandBuffer(commandBuffer);
 
+    // --- OBSŁUGA SEMAFORA CZEKANIA ---
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffer;
+
+    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    if (waitSemaphore != VK_NULL_HANDLE)
+    {
+        submitInfo.waitSemaphoreCount = 1;
+        submitInfo.pWaitSemaphores = &waitSemaphore;
+        submitInfo.pWaitDstStageMask = &waitStage;
+    }
+
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &computeFinishedSemaphore;
 

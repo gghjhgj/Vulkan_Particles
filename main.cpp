@@ -187,8 +187,9 @@ int main()
                             Config::fluid.simWidth,
                             Config::fluid.simHeight);
 
+                        // ZMIANA: Renderer ma czekać na FLUID, bo Fluid wykonuje się jako ostatni!
                         renderer.setComputeFinishedSemaphore(
-                            fluidParticles.getComputeFinishedSemaphore());
+                            fluid.getComputeFinishedSemaphore());
                     }
                     else if (controlMode == ControlMode::FluidParticlesMusic)
                     {
@@ -247,7 +248,7 @@ int main()
                         Config::fluid.simWidth,
                         Config::fluid.simHeight);
                 }
-                else if (controlMode == ControlMode::FluidParticles)
+else if (controlMode == ControlMode::FluidParticles)
                 {
                     FluidPushConstants push{};
                     push.mouseX = static_cast<float>(mousePos.x);
@@ -266,17 +267,20 @@ int main()
                     push.simHeight = Config::fluid.simHeight;
                     push.isMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) ? 1 : 0;
 
-                    fluid.update(
-                        vulkanContext,
-                        &push,
-                        sizeof(FluidPushConstants));
-
+                    // 1. Cząstki liczą się pierwsze i sygnalizują swój semafor (B)
                     fluidParticles.update(
                         vulkanContext,
                         particles,
                         fluid,
                         &push,
                         sizeof(FluidPushConstants));
+
+                    // 2. Ciecz CZEKA na semafor cząstek (B), liczy solver i sygnalizuje swój semafor (A)
+                    fluid.update(
+                        vulkanContext,
+                        &push,
+                        sizeof(FluidPushConstants),
+                        fluidParticles.getComputeFinishedSemaphore()); // <--- PRZEKAZUJEMY SEMAFOR CZĄSTEK!
 
                     renderer.setFluidBuffer(
                         fluid.getActiveBuffer(),

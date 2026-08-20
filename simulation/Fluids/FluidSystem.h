@@ -45,7 +45,8 @@ public:
     void update(
         VulkanContext& context,
         const void* pushData,
-        uint32_t pushConstantSize
+        uint32_t pushConstantSize,
+        VkSemaphore waitSemaphore = VK_NULL_HANDLE
     );
 
     void destroy(

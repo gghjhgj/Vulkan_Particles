@@ -13,7 +13,7 @@ struct Particle
     float prevY;
     float vx;
     float vy;
-    uint color; 
+    uint color;
 };
 
 struct FluidCell
@@ -49,12 +49,12 @@ layout(push_constant) uniform Push
     float splatForce;
     float velocityDissipation;
     float densityDissipation;
-    float vorticity;        
-    uint simWidth;          
-    uint simHeight;         
-    uint windowWidth;       
-    uint windowHeight;      
-    uint isMouseDown;       
+    float vorticity;
+    uint simWidth;
+    uint simHeight;
+    uint windowWidth;
+    uint windowHeight;
+    uint isMouseDown;
 } push;
 
 FluidCell getFluidCell(int x, int y)
@@ -67,10 +67,10 @@ FluidCell getFluidCell(int x, int y)
 vec2 sampleFluidVelocity(vec2 uv)
 {
     vec2 pos = uv * vec2(float(push.simWidth), float(push.simHeight)) - 0.5;
-    
+
     int maxW = int(push.simWidth) - 1;
     int maxH = int(push.simHeight) - 1;
-    
+
     ivec2 i0 = clamp(ivec2(floor(pos)), ivec2(0), ivec2(maxW, maxH));
     ivec2 i1 = clamp(i0 + 1,            ivec2(0), ivec2(maxW, maxH));
     vec2 f = fract(pos);
@@ -81,6 +81,25 @@ vec2 sampleFluidVelocity(vec2 uv)
     vec2 v11 = vec2(getFluidCell(i1.x, i1.y).vx, getFluidCell(i1.x, i1.y).vy);
 
     return mix(mix(v00, v10, f.x), mix(v01, v11, f.x), f.y);
+}
+
+// Dokładnie ta sama funkcja koloru co w fluid_advect.comp
+vec3 getVelocityColor(vec2 dir)
+{
+    float len = length(dir);
+    if (len < 0.001) return vec3(0.0, 0.8, 1.0);
+    float angle = atan(dir.y, dir.x);
+    return 0.5 + 0.5 * cos(angle + vec3(0.0, 2.0, 4.0));
+}
+
+// Dokładnie to samo wyliczanie odległości od kapsuły ruchu co przy myszce
+float distToSegment(vec2 p, vec2 a, vec2 b)
+{
+    vec2 pa = p - a;
+    vec2 ba = b - a;
+    float d = dot(ba, ba);
+    float h = (d > 0.00001) ? clamp(dot(pa, ba) / d, 0.0, 1.0) : 0.0;
+    return length(pa - ba * h);
 }
 
 void main()
@@ -95,74 +114,121 @@ void main()
         push.windowWidth > 0 ? float(push.windowWidth) : 1920.0,
         push.windowHeight > 0 ? float(push.windowHeight) : 1080.0
     );
-    vec2 simRes = vec2(float(push.simWidth), float(push.simHeight));
 
+    vec2 simRes = vec2(float(push.simWidth), float(push.simHeight));
     vec2 pos = vec2(p.x, p.y);
     vec2 vel = vec2(p.vx, p.vy);
 
-    vec2 uv = pos / screenRes;
-    vec2 fluidVelocity = sampleFluidVelocity(uv);
+    float dt = (push.dt > 0.0 && push.dt < 0.1) ? push.dt : 0.016;
 
-    float dragStrength = 0.45;
-    vel = mix(vel, fluidVelocity * 50.0, dragStrength * push.dt);
+    // ------------------------------------------------------------
+    // 1. Fizyka cząstki
+    // ------------------------------------------------------------
+    vec2 uv = pos / screenRes;
+    vec2 fluidVel = sampleFluidVelocity(uv);
+
+    // Przeliczenie prędkości cieczy na przestrzeń pikseli ekranu
+    vec2 fluidVelPixels = fluidVel * (screenRes.x / simRes.x) * 60.0;
+    
+    // Cząstka podąża za wirem cieczy
+    vel = mix(vel, fluidVelPixels, clamp(6.0 * dt, 0.0, 1.0));
 
     if (push.isMouseDown != 0)
     {
         vec2 mousePos = vec2(push.mouseX, push.mouseY);
         vec2 delta = mousePos - pos;
         float dist = length(delta);
+        float attractionRadius = 350.0;
 
-        float attractionRadius = 300.0;
-        if (dist < attractionRadius)
+        if (dist < attractionRadius && dist > 0.001)
         {
-            float forceFactor = (1.0 - dist / attractionRadius);
-            
-            vec2 pullForce = normalize(delta) * (forceFactor * 12.0);
-            vel += pullForce;
-
-            vec2 rotateForce = vec2(-delta.y, delta.x) * (forceFactor * 0.08);
-            vel += rotateForce;
+            float forceFactor = 1.0 - dist / attractionRadius;
+            vec2 pullForce = normalize(delta) * (forceFactor * 900.0);
+            vec2 rotateForce = vec2(-delta.y, delta.x) * (forceFactor * 6.0);
+            vel += (pullForce + rotateForce) * dt;
         }
     }
 
     vel *= 0.985;
-    float maxVel = 400.0;
+    float maxVel = 1200.0;
     if (length(vel) > maxVel)
-    {
         vel = normalize(vel) * maxVel;
-    }
 
-    p.prevX = pos.x;
-    p.prevY = pos.y;
+    vec2 prevPos = pos;
+    pos += vel * dt;
+
+    // Odbicia od krawędzi ekranu
+    if (pos.x < 0.0 || pos.x >= screenRes.x) { vel.x *= -0.5; pos.x = clamp(pos.x, 0.0, screenRes.x - 1.0); }
+    if (pos.y < 0.0 || pos.y >= screenRes.y) { vel.y *= -0.5; pos.y = clamp(pos.y, 0.0, screenRes.y - 1.0); }
+
+    p.prevX = prevPos.x;
+    p.prevY = prevPos.y;
     p.vx = vel.x;
     p.vy = vel.y;
-    pos += vel * push.dt;
-
-    if (pos.x < 0.0 || pos.x > screenRes.x) { vel.x *= -0.5; pos.x = clamp(pos.x, 0.0, screenRes.x); }
-    if (pos.y < 0.0 || pos.y > screenRes.y) { vel.y *= -0.5; pos.y = clamp(pos.y, 0.0, screenRes.y); }
-
     p.x = pos.x;
     p.y = pos.y;
 
-    ivec2 gridPos = ivec2((pos / screenRes) * simRes);
+    // ------------------------------------------------------------
+    // 2. Wstrzykiwanie do cieczy (Identyczne jak w fluid_advect.comp)
+    // ------------------------------------------------------------
+    vec2 pDelta = pos - prevPos;
+    float particleSpeed = length(pDelta);
 
-    if (gridPos.x >= 0 && gridPos.x < int(push.simWidth) &&
-        gridPos.y >= 0 && gridPos.y < int(push.simHeight))
+    if (particleSpeed > 0.001)
     {
-        int cellIdx = gridPos.y * int(push.simWidth) + gridPos.x;
+        float speedFactor = smoothstep(0.0, 4.0, particleSpeed);
+        vec3 dyeColor = (particleSpeed < 1.0) ? vec3(0.0, 0.8, 1.0) : getVelocityColor(pDelta);
 
-        vec4 pColor = unpackUnorm4x8(p.color);
+        // Promień w pikselach ekranu (dokładnie jak myszka)
+        float forceRadius = push.splatRadius;
 
-        float velocityDeposit = 0.015;
-        float colorDeposit = 0.08;
+        // Bounding Box obejmujący CAŁĄ drogę cząstki (od prevPos do pos) + promień pędzla
+        vec2 minPixel = min(prevPos, pos) - vec2(forceRadius);
+        vec2 maxPixel = max(prevPos, pos) + vec2(forceRadius);
 
-        fluidCells[cellIdx].vx += (vel.x / screenRes.x) * velocityDeposit;
-        fluidCells[cellIdx].vy += (vel.y / screenRes.y) * velocityDeposit;
+        // Przeliczenie Bounding Boxa na indeksy w siatce symulacji (z obcięciem do krawędzi)
+        ivec2 minGrid = clamp(ivec2(floor((minPixel / screenRes) * simRes)), ivec2(0), ivec2(int(push.simWidth) - 1, int(push.simHeight) - 1));
+        ivec2 maxGrid = clamp(ivec2(ceil((maxPixel / screenRes) * simRes)),   ivec2(0), ivec2(int(push.simWidth) - 1, int(push.simHeight) - 1));
 
-        fluidCells[cellIdx].r = clamp(fluidCells[cellIdx].r + pColor.r * colorDeposit, 0.0, 1.0);
-        fluidCells[cellIdx].g = clamp(fluidCells[cellIdx].g + pColor.g * colorDeposit, 0.0, 1.0);
-        fluidCells[cellIdx].b = clamp(fluidCells[cellIdx].b + pColor.b * colorDeposit, 0.0, 1.0);
-        fluidCells[cellIdx].a = clamp(fluidCells[cellIdx].a + pColor.a * colorDeposit, 0.0, 1.0);
+        for (int gy = minGrid.y; gy <= maxGrid.y; ++gy)
+        {
+            for (int gx = minGrid.x; gx <= maxGrid.x; ++gx)
+            {
+                // Dokładna pozycja środka komórki w pikselach ekranu
+                vec2 cellPixelPos = ((vec2(gx, gy) + 0.5) / simRes) * screenRes;
+                
+                // Dystans do odcinka ruchu cząstki (ostra kapsuła)
+                float dist = distToSegment(cellPixelPos, prevPos, pos);
+
+                if (dist < forceRadius)
+                {
+                    int cellIdx = gy * int(push.simWidth) + gx;
+
+                    // Ostry spadek gaussowski
+                    float forceInf = exp(-(dist * dist) / (forceRadius * forceRadius * 0.4));
+                    
+                    // Wstrzyknięcie wektora pędu w tej samej skali co myszka
+                    vec2 pDeltaUV = pDelta / screenRes;
+                    vec2 vFromParticle = pDeltaUV * push.splatForce;
+
+                    fluidCells[cellIdx].vx += vFromParticle.x * forceInf * speedFactor;
+                    fluidCells[cellIdx].vy += vFromParticle.y * forceInf * speedFactor;
+
+                    // Wstrzyknięcie nasyconego koloru (mix zamiast dodawania bieli)
+                    float colorRadius = forceRadius * 0.9;
+                    if (dist < colorRadius)
+                    {
+                        float colorInf = exp(-(dist * dist) / (colorRadius * colorRadius * 0.3));
+                        float mixIntensity = colorInf * 0.65 * (0.1 + 0.9 * speedFactor);
+
+                        fluidCells[cellIdx].r = mix(fluidCells[cellIdx].r, dyeColor.r, mixIntensity);
+                        fluidCells[cellIdx].g = mix(fluidCells[cellIdx].g, dyeColor.g, mixIntensity);
+                        fluidCells[cellIdx].b = mix(fluidCells[cellIdx].b, dyeColor.b, mixIntensity);
+                        fluidCells[cellIdx].a = 1.0;
+                    }
+                }
+            }
+        }
     }
 
     particles[id] = p;
