@@ -137,16 +137,29 @@ void main()
     if (push.isMouseDown != 0)
     {
         vec2 mousePos = vec2(push.mouseX, push.mouseY);
-        vec2 delta = mousePos - pos;
-        float dist = length(delta);
-        float attractionRadius = 350.0;
 
-        if (dist < attractionRadius && dist > 0.001)
+        vec2 delta = pos - mousePos;
+        float dist = length(delta);
+
+        const float RADIUS = 700.0;
+        const float MIN_RADIUS = 60.0;
+
+        if (dist > 0.001 && dist < RADIUS)
         {
-            float forceFactor = 1.0 - dist / attractionRadius;
-            vec2 pullForce = normalize(delta) * (forceFactor * 9000.0);
-            vec2 rotateForce = vec2(-delta.y, delta.x) * (forceFactor * 6.0);
-            vel += (pullForce + rotateForce) * dt;
+            float orbitRadius = clamp(dist, MIN_RADIUS, RADIUS);
+
+            float angle = atan(delta.y, delta.x);
+
+            float t = 1.0 - dist / RADIUS;
+            float influence = t * t;
+
+            float angularSpeed = mix(8.0, 30.0, influence);
+
+            float nextAngle = angle + angularSpeed * dt;
+
+            vec2 targetPos = mousePos + vec2(cos(nextAngle), sin(nextAngle)) * orbitRadius;
+
+            vel = (targetPos - pos) / max(dt, 0.0001);
         }
     }
 
