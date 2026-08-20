@@ -38,7 +38,6 @@ void FluidParticles::update(
     constexpr uint32_t WORKGROUP_SIZE = 256;
     uint32_t groupCount = (particles.getCount() + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
 
-    // ZMIANA: Przekazujemy VK_NULL_HANDLE zamiast fluid.getComputeFinishedSemaphore()
     computePipeline.dispatch(
         context,
         groupCount,

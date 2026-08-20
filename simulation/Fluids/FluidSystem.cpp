@@ -224,7 +224,7 @@ void FluidSystem::update(
     VulkanContext& context,
     const void* pushData,
     uint32_t pushConstantSize,
-    VkSemaphore waitSemaphore // <--- DODAJ TUTAJ
+    VkSemaphore waitSemaphore
 )
 {
     constexpr uint32_t WORKGROUP_SIZE = 256;
@@ -312,7 +312,6 @@ void FluidSystem::update(
 
     vkEndCommandBuffer(commandBuffer);
 
-    // --- OBSŁUGA SEMAFORA CZEKANIA ---
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;

@@ -187,7 +187,6 @@ int main()
                             Config::fluid.simWidth,
                             Config::fluid.simHeight);
 
-                        // ZMIANA: Renderer ma czekać na FLUID, bo Fluid wykonuje się jako ostatni!
                         renderer.setComputeFinishedSemaphore(
                             fluid.getComputeFinishedSemaphore());
                     }
@@ -267,7 +266,6 @@ else if (controlMode == ControlMode::FluidParticles)
                     push.simHeight = Config::fluid.simHeight;
                     push.isMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) ? 1 : 0;
 
-                    // 1. Cząstki liczą się pierwsze i sygnalizują swój semafor (B)
                     fluidParticles.update(
                         vulkanContext,
                         particles,
@@ -275,12 +273,11 @@ else if (controlMode == ControlMode::FluidParticles)
                         &push,
                         sizeof(FluidPushConstants));
 
-                    // 2. Ciecz CZEKA na semafor cząstek (B), liczy solver i sygnalizuje swój semafor (A)
                     fluid.update(
                         vulkanContext,
                         &push,
                         sizeof(FluidPushConstants),
-                        fluidParticles.getComputeFinishedSemaphore()); // <--- PRZEKAZUJEMY SEMAFOR CZĄSTEK!
+                        fluidParticles.getComputeFinishedSemaphore());
 
                     renderer.setFluidBuffer(
                         fluid.getActiveBuffer(),

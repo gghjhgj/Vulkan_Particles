@@ -128,7 +128,7 @@ void main()
 
     if (gradLen > 0.00001)
     {
-        vec2 N = grad / gradLen;
+        vec2 N = grad / (gradLen + 0.001);
         
         float vorticityStrength = push.vorticity; 
         
@@ -165,7 +165,7 @@ void main()
         float forceRadius = push.splatRadius;
         if (dist < forceRadius)
         {
-            float forceInf = exp(-(dist * dist) / (forceRadius * forceRadius * 0.4));
+            float forceInf = exp(-(dist * dist) / (forceRadius * forceRadius * 0.4 + 0.001));
             
             float force = push.splatForce;
             
@@ -178,7 +178,7 @@ void main()
         float colorRadius = forceRadius * 0.9;
         if (dist < colorRadius)
         {
-            float colorInf = exp(-(dist * dist) / (colorRadius * colorRadius * 0.3));
+            float colorInf = exp(-(dist * dist) / (colorRadius * colorRadius * 0.3 + 0.001));
             float mixIntensity = colorInf * 0.65 * (0.1 + 0.9 * speedFactor);
             advC = mix(advC, vec4(dyeColor, 1.0), mixIntensity);
         }
@@ -193,11 +193,13 @@ void main()
     float vDiss = push.velocityDissipation;
     float dDiss = push.densityDissipation;
 
+    advV = clamp(advV, vec2(-100.0), vec2(100.0));
+
     FluidCell outC;
     outC.vx = advV.x * vDiss;
     outC.vy = advV.y * vDiss;
     outC.pressure = 0.0; 
-    outC.divergence = div;
+    outC.divergence = clamp(div, -30.0, 30.0);
 
     outC.color = advC * dDiss;
 
