@@ -130,7 +130,7 @@ void main()
     vec2 uv = pos / screenRes;
     vec2 fluidVel = sampleFluidVelocity(uv);
 
-    vec2 fluidVelPixels = fluidVel * (screenRes.x / simRes.x) * 60.0;
+    vec2 fluidVelPixels = fluidVel * (screenRes.x / simRes.x) * 5;
     
     vel = mix(vel, fluidVelPixels, clamp(6.0 * dt, 0.0, 1.0));
 
