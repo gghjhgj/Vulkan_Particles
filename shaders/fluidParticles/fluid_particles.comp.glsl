@@ -21,9 +21,8 @@ layout(std430, set = 0, binding = 0) buffer ParticleBuffer
     Particle particles[];
 };
 
-layout(rg32f, set = 0, binding = 1) uniform image2D inOutVelocity;
-layout(rgba32f, set = 0, binding = 2) uniform image2D inOutColor;
-
+layout(rg16f, set = 0, binding = 1) uniform image2D inOutVelocity;
+layout(rgba8, set = 0, binding = 2) uniform image2D inOutColor;
 layout(push_constant) uniform Push
 {
     float mouseX;

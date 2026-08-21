@@ -59,10 +59,11 @@ void FluidSystem::init(
     uint32_t pressWidth = (width + 1) / 2;
     uint32_t pressHeight = (height + 1) / 2;
 
-    velocityTextureA.init(context, width, height, VK_FORMAT_R32G32_SFLOAT);
-    velocityTextureB.init(context, width, height, VK_FORMAT_R32G32_SFLOAT);
-    colorTextureA.init(context, width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
-    colorTextureB.init(context, width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
+    velocityTextureA.init(context, width, height, VK_FORMAT_R16G16_SFLOAT);
+    velocityTextureB.init(context, width, height, VK_FORMAT_R16G16_SFLOAT);
+   
+    colorTextureA.init(context, width, height, VK_FORMAT_R8G8B8A8_UNORM);
+    colorTextureB.init(context, width, height, VK_FORMAT_R8G8B8A8_UNORM);
 
     pressureTexture.init(context, pressWidth, pressHeight, VK_FORMAT_R32_SFLOAT);
     divergenceTexture.init(context, pressWidth, pressHeight, VK_FORMAT_R32_SFLOAT);

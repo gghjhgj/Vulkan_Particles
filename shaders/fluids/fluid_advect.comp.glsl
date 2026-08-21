@@ -4,8 +4,8 @@ layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(binding = 0) uniform sampler2D inVelocity;
 layout(binding = 1) uniform sampler2D inColor;
 
-layout(rg32f, binding = 2) writeonly uniform image2D outVelocity;
-layout(rgba32f, binding = 3) writeonly uniform image2D outColor;
+layout(rg16f, binding = 2) writeonly uniform image2D outVelocity;
+layout(rgba8, set = 0, binding = 3) uniform image2D outColor;
 layout(r32f, binding = 4) writeonly uniform image2D outDivergence;
 
 layout(push_constant) uniform Push

@@ -2,8 +2,8 @@
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(binding = 0) uniform sampler2D inPressure;
-layout(rg32f, binding = 1) readonly uniform image2D inVelocity;
-layout(rg32f, binding = 2) writeonly uniform image2D outVelocity;
+layout(rg16f, binding = 1) readonly uniform image2D inVelocity;
+layout(rg16f, binding = 2) writeonly uniform image2D outVelocity;
 
 layout(push_constant) uniform Push
 {
