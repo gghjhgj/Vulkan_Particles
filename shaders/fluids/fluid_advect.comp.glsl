@@ -1,11 +1,9 @@
 #version 450
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-// Wejścia jako próbkowniki (Hardware Bilinear + Hardware Clamp)
 layout(binding = 0) uniform sampler2D inVelocity;
 layout(binding = 1) uniform sampler2D inColor;
 
-// Wyjścia jako Storage Images
 layout(rg32f, binding = 2) writeonly uniform image2D outVelocity;
 layout(rgba32f, binding = 3) writeonly uniform image2D outColor;
 layout(r32f, binding = 4) writeonly uniform image2D outDivergence;
@@ -57,18 +55,15 @@ void main()
 
     float dt = (push.dt > 0.0 && push.dt < 0.1) ? push.dt : 0.016;
 
-    // Sprzętowy odczyt bezpośrednio ze współrzędnych całkowitych (texelFetch)
     vec2 currentV = texelFetch(inVelocity, pos, 0).xy;
 
-    // SPRZĘTOWE PRÓBKOWANIE DWULINIOWE W JEDNEJ LINICZCE!
     vec2 traceUV = uv - (currentV * dt) * invSim;
     vec2 advV = texture(inVelocity, traceUV).xy;
     vec4 advC = texture(inColor, traceUV);
 
-    // Vorticity (odczyt sąsiadów przez texelFetch ze sprzętowym cachem 2D)
-    vec2 vL = texelFetch(inVelocity, clamp(pos + ivec2(-1, 0), ivec2(0), ivec2(pos.x, int(push.simHeight)-1)), 0).xy;
+    vec2 vL = texelFetch(inVelocity, clamp(pos + ivec2(-1, 0), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
     vec2 vR = texelFetch(inVelocity, clamp(pos + ivec2(1, 0), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
-    vec2 vB = texelFetch(inVelocity, clamp(pos + ivec2(0, -1), ivec2(0), ivec2(int(push.simWidth)-1, pos.y)), 0).xy;
+    vec2 vB = texelFetch(inVelocity, clamp(pos + ivec2(0, -1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
     vec2 vT = texelFetch(inVelocity, clamp(pos + ivec2(0, 1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
 
     float curlCenter = (vR.y - vL.y) - (vT.x - vB.x);
@@ -114,8 +109,16 @@ void main()
         if (dist < forceRadius)
         {
             float forceInf = exp(-(dist * dist) / (forceRadius * forceRadius * 0.4 + 0.001));
-            vec2 mDeltaUV = mDelta / screenRes;
-            advV += mDeltaUV * push.splatForce * forceInf * speedFactor;
+            
+            vec2 fwd = (mouseSpeed > 0.0001) ? (mDelta / mouseSpeed) : vec2(0.0);
+            vec2 side = vec2(-fwd.y, fwd.x);
+            vec2 toPixel = pixelPos - m0;
+            float sideDist = dot(toPixel, side);
+            float swirl = clamp(sideDist / max(forceRadius, 0.001), -1.0, 1.0);
+            vec2 forceDir = fwd * 0.7 + side * (swirl * 1.3);
+
+            vec2 mForceUV = forceDir * (mouseSpeed / screenRes.x);
+            advV += mForceUV * push.splatForce * forceInf * speedFactor;
         }
 
         float colorRadius = forceRadius * 0.9;
@@ -127,12 +130,15 @@ void main()
         }
     }
 
-    advV = clamp(advV, vec2(-100.0), vec2(100.0));
+    advV = clamp(advV, vec2(-200.0), vec2(200.0));
     
-    // Zapis do Storage Images
     imageStore(outVelocity, pos, vec4(advV * push.velocityDissipation, 0.0, 0.0));
     imageStore(outColor, pos, advC * push.densityDissipation);
 
-    float div = 0.5 * ((vR.x - vL.x) + (vT.y - vB.y));
-    imageStore(outDivergence, pos, vec4(clamp(div, -30.0, 30.0), 0.0, 0.0, 0.0));
+    if ((pos.x & 1) == 0 && (pos.y & 1) == 0)
+    {
+        ivec2 halfPos = pos / 2;
+        float div = 0.5 * ((vR.x - vL.x) + (vT.y - vB.y));
+        imageStore(outDivergence, halfPos, vec4(clamp(div, -30.0, 30.0), 0.0, 0.0, 0.0));
+    }
 }

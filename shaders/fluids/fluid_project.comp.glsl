@@ -1,7 +1,7 @@
 #version 450
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(r32f, binding = 0) readonly uniform image2D inPressure;
+layout(binding = 0) uniform sampler2D inPressure;
 layout(rg32f, binding = 1) readonly uniform image2D inVelocity;
 layout(rg32f, binding = 2) writeonly uniform image2D outVelocity;
 
@@ -22,24 +22,21 @@ layout(push_constant) uniform Push
     uint windowWidth;       
     uint windowHeight;      
     uint isMouseDown;
-    uint phase;
 } push;
-
-float getP(ivec2 p)
-{
-    p = clamp(p, ivec2(0), ivec2(int(push.simWidth - 1), int(push.simHeight - 1)));
-    return imageLoad(inPressure, p).r;
-}
 
 void main()
 {
     ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
     if (pos.x >= int(push.simWidth) || pos.y >= int(push.simHeight)) return;
 
-    float pL = getP(pos + ivec2(-1, 0));
-    float pR = getP(pos + ivec2(1, 0));
-    float pB = getP(pos + ivec2(0, -1));
-    float pT = getP(pos + ivec2(0, 1));
+    vec2 simSize = vec2(float(push.simWidth), float(push.simHeight));
+    vec2 uv = (vec2(pos) + 0.5) / simSize;
+    vec2 dUV = 1.0 / simSize;
+
+    float pR = texture(inPressure, uv + vec2(dUV.x, 0.0)).r;
+    float pL = texture(inPressure, uv - vec2(dUV.x, 0.0)).r;
+    float pT = texture(inPressure, uv + vec2(0.0, dUV.y)).r;
+    float pB = texture(inPressure, uv - vec2(0.0, dUV.y)).r;
 
     vec2 gradP = vec2(pR - pL, pT - pB) * 0.5;
 

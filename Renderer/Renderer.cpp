@@ -84,7 +84,6 @@ void Renderer::init(
         }
     }
 
-    // Tworzenie samplera do wyświetlania płynu na ekranie
     fluidSampler = VulkanTexture::createLinearClampSampler(vkContext->device);
 
     createParticlePipeline();
@@ -255,14 +254,11 @@ void Renderer::setParticleBuffer(
     }
 }
 
-// -------------------------------------------------------------
-// FLUID PIPELINE (ZMIANA NA COMBINED_IMAGE_SAMPLER)
-// -------------------------------------------------------------
 void Renderer::createFluidPipeline()
 {
     VkDescriptorSetLayoutBinding binding{};
     binding.binding = 0;
-    binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; // <--- Tekstura 2D
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     binding.descriptorCount = 1;
     binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
@@ -296,7 +292,7 @@ void Renderer::createFluidPipeline()
 void Renderer::createFluidDescriptors()
 {
     VkDescriptorPoolSize poolSize{};
-    poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; // <--- Sampler w poolu
+    poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     poolSize.descriptorCount = MAX_FRAMES_IN_FLIGHT;
 
     VkDescriptorPoolCreateInfo poolInfo{};
@@ -443,7 +439,6 @@ void Renderer::render(ImGuiManager &imgui)
         throw std::runtime_error("Failed to begin command buffer.");
     }
 
-    // Synchronizacja z compute shaderem
     if (computeFinishedSemaphore != VK_NULL_HANDLE)
     {
         if (particleBuffer != nullptr)
@@ -466,7 +461,6 @@ void Renderer::render(ImGuiManager &imgui)
         }
         else if (fluidTexture != nullptr)
         {
-            // BARIERA OBRAZU (Dla tekstury płynu)
             VkImageMemoryBarrier imageBarrier{};
             imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             imageBarrier.image = fluidTexture->image;

@@ -20,7 +20,6 @@ public:
     VulkanTexture() = default;
     ~VulkanTexture() = default;
 
-    // Inicjalizuje teksturę 2D jako Storage Image + Sampled Image
     void init(
         VulkanContext& context,
         uint32_t width,
@@ -28,16 +27,13 @@ public:
         VkFormat format,
         VkImageUsageFlags additionalUsage = 0);
 
-    // Pomocnik do zmiany layoutu tekstury w Command Bufferze
     void transitionLayout(
         VkCommandBuffer cmd,
         VkImageLayout newLayout,
         VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
-    // Statyczny pomocnik do tworzenia samplera dwuliniowego z klamopwaniem do krawędzi
     static VkSampler createLinearClampSampler(VkDevice device);
 
-    // Zwalnianie zasobów
     void destroy(VkDevice device);
 };

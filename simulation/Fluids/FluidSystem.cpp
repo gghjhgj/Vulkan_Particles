@@ -7,13 +7,11 @@
 VkShaderModule FluidSystem::createShaderModule(VkDevice device, const std::string& path)
 {
     std::ifstream file(path, std::ios::ate | std::ios::binary);
-
     if (!file.is_open())
         throw std::runtime_error("Nie udalo sie otworzyc shadera: " + path);
 
     size_t fileSize = static_cast<size_t>(file.tellg());
     std::vector<char> buffer(fileSize);
-
     file.seekg(0);
     file.read(buffer.data(), fileSize);
     file.close();
@@ -24,7 +22,6 @@ VkShaderModule FluidSystem::createShaderModule(VkDevice device, const std::strin
     createInfo.pCode = reinterpret_cast<const uint32_t*>(buffer.data());
 
     VkShaderModule module{VK_NULL_HANDLE};
-
     if (vkCreateShaderModule(device, &createInfo, nullptr, &module) != VK_SUCCESS)
         throw std::runtime_error("Blad tworzenia ShaderModule dla: " + path);
 
@@ -59,14 +56,16 @@ void FluidSystem::init(
     this->width = width;
     this->height = height;
 
+    uint32_t pressWidth = (width + 1) / 2;
+    uint32_t pressHeight = (height + 1) / 2;
+
     velocityTextureA.init(context, width, height, VK_FORMAT_R32G32_SFLOAT);
     velocityTextureB.init(context, width, height, VK_FORMAT_R32G32_SFLOAT);
-
     colorTextureA.init(context, width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
     colorTextureB.init(context, width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
 
-    pressureTexture.init(context, width, height, VK_FORMAT_R32_SFLOAT);
-    divergenceTexture.init(context, width, height, VK_FORMAT_R32_SFLOAT);
+    pressureTexture.init(context, pressWidth, pressHeight, VK_FORMAT_R32_SFLOAT);
+    divergenceTexture.init(context, pressWidth, pressHeight, VK_FORMAT_R32_SFLOAT);
 
     linearSampler = VulkanTexture::createLinearClampSampler(context.device);
 
@@ -128,9 +127,9 @@ void FluidSystem::init(
     vkCreateDescriptorSetLayout(context.device, &jacobiLayoutInfo, nullptr, &jacobiDescriptorSetLayout);
 
     VkDescriptorSetLayoutBinding projectBindings[3]{};
-    projectBindings[0] = {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
-    projectBindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
-    projectBindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    projectBindings[0] = {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    projectBindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    projectBindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
 
     VkDescriptorSetLayoutCreateInfo projectLayoutInfo{};
     projectLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -146,8 +145,8 @@ void FluidSystem::init(
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pushConstantRangeCount = 1;
-    pipelineLayoutInfo.pPushConstantRanges = &pushRange;
+    pipelineLayoutInfo.pushConstantRangeCount = (pushConstantSize > 0) ? 1 : 0;
+    pipelineLayoutInfo.pPushConstantRanges = (pushConstantSize > 0) ? &pushRange : nullptr;
 
     pipelineLayoutInfo.pSetLayouts = &advectDescriptorSetLayout;
     vkCreatePipelineLayout(context.device, &pipelineLayoutInfo, nullptr, &advectPipelineLayout);
@@ -172,9 +171,9 @@ void FluidSystem::init(
 
     VkDescriptorPoolSize poolSizes[2]{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[0].descriptorCount = 4;
+    poolSizes[0].descriptorCount = 5;
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    poolSizes[1].descriptorCount = 11;
+    poolSizes[1].descriptorCount = 10;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -206,8 +205,8 @@ void FluidSystem::init(
     projectDescriptorSet    = allSets[3];
 
     VkDescriptorImageInfo velA_SamplerInfo{linearSampler, velocityTextureA.view, VK_IMAGE_LAYOUT_GENERAL};
-    VkDescriptorImageInfo velA_StorageInfo{VK_NULL_HANDLE, velocityTextureA.view, VK_IMAGE_LAYOUT_GENERAL};
     VkDescriptorImageInfo velB_StorageInfo{VK_NULL_HANDLE, velocityTextureB.view, VK_IMAGE_LAYOUT_GENERAL};
+    VkDescriptorImageInfo velA_StorageInfo{VK_NULL_HANDLE, velocityTextureA.view, VK_IMAGE_LAYOUT_GENERAL};
 
     VkDescriptorImageInfo colA_SamplerInfo{linearSampler, colorTextureA.view, VK_IMAGE_LAYOUT_GENERAL};
     VkDescriptorImageInfo colB_SamplerInfo{linearSampler, colorTextureB.view, VK_IMAGE_LAYOUT_GENERAL};
@@ -215,6 +214,7 @@ void FluidSystem::init(
     VkDescriptorImageInfo colB_StorageInfo{VK_NULL_HANDLE, colorTextureB.view, VK_IMAGE_LAYOUT_GENERAL};
 
     VkDescriptorImageInfo press_StorageInfo{VK_NULL_HANDLE, pressureTexture.view, VK_IMAGE_LAYOUT_GENERAL};
+    VkDescriptorImageInfo press_SamplerInfo{linearSampler, pressureTexture.view, VK_IMAGE_LAYOUT_GENERAL};
     VkDescriptorImageInfo div_StorageInfo{VK_NULL_HANDLE, divergenceTexture.view, VK_IMAGE_LAYOUT_GENERAL};
 
     VkWriteDescriptorSet advectWrites0[5]{};
@@ -236,9 +236,9 @@ void FluidSystem::init(
     jacobiWrites[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, jacobiDescriptorSet, 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &div_StorageInfo,   nullptr, nullptr};
 
     VkWriteDescriptorSet projectWrites[3]{};
-    projectWrites[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 0, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &press_StorageInfo, nullptr, nullptr};
-    projectWrites[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &velB_StorageInfo,  nullptr, nullptr};
-    projectWrites[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &velA_StorageInfo,  nullptr, nullptr};
+    projectWrites[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 0, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &press_SamplerInfo, nullptr, nullptr};
+    projectWrites[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &velB_StorageInfo,  nullptr, nullptr};
+    projectWrites[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &velA_StorageInfo,  nullptr, nullptr};
 
     VkWriteDescriptorSet allWrites[15]{};
     uint32_t writeIndex = 0;
@@ -267,7 +267,11 @@ void FluidSystem::update(
 {
     const uint32_t groupX = (width + 15) / 16;
     const uint32_t groupY = (height + 15) / 16;
-    const uint32_t rbGroupX = ((width / 2) + 15) / 16;
+
+    const uint32_t pressWidth = (width + 1) / 2;
+    const uint32_t pressHeight = (height + 1) / 2;
+    const uint32_t pressGroupX = (pressWidth + 15) / 16;
+    const uint32_t pressGroupY = (pressHeight + 15) / 16;
 
     vkWaitForFences(context.device, 1, &computeFence, VK_TRUE, UINT64_MAX);
     vkResetFences(context.device, 1, &computeFence);
@@ -292,10 +296,7 @@ void FluidSystem::update(
             cmd,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0,
-            1, &barrier,
-            0, nullptr,
-            0, nullptr);
+            0, 1, &barrier, 0, nullptr, 0, nullptr);
     };
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineAdvect);
@@ -329,14 +330,9 @@ void FluidSystem::update(
         vkCmdPushConstants(commandBuffer, jacobiPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, pushConstantSize, pushData);
     }
 
-    const uint32_t phaseOffset = pushConstantSize - sizeof(uint32_t);
-
     for (uint32_t i = 0; i < pressureIterations; ++i)
     {
-        uint32_t phase = i & 1u;
-
-        vkCmdPushConstants(commandBuffer, jacobiPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, phaseOffset, sizeof(uint32_t), &phase);
-        vkCmdDispatch(commandBuffer, rbGroupX, groupY, 1);
+        vkCmdDispatch(commandBuffer, pressGroupX, pressGroupY, 1);
         insertComputeBarrier(commandBuffer);
     }
 

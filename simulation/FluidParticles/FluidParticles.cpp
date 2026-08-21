@@ -40,10 +40,6 @@ void FluidParticles::init(
 {
     particleCount = particles.getCount();
 
-    // 1. Tworzenie Layoutu Deskryptorów:
-    // Binding 0: Bufor cząsteczek (STORAGE_BUFFER)
-    // Binding 1: Prędkość płynu (STORAGE_IMAGE)
-    // Binding 2: Kolor płynu (STORAGE_IMAGE)
     VkDescriptorSetLayoutBinding bindings[3]{};
     bindings[0] = {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     bindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
@@ -57,7 +53,6 @@ void FluidParticles::init(
     if (vkCreateDescriptorSetLayout(context.device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS)
         throw std::runtime_error("Blad tworzenia descriptorSetLayout w FluidParticles");
 
-    // 2. Pipeline Layout z Push Constantami
     VkPushConstantRange pushRange{};
     pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     pushRange.offset = 0;
@@ -73,7 +68,6 @@ void FluidParticles::init(
     if (vkCreatePipelineLayout(context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
         throw std::runtime_error("Blad tworzenia pipelineLayout w FluidParticles");
 
-    // 3. Tworzenie Pipeline'u Compute ze Specialization Constants
     VkShaderModule shaderModule = createShaderModule(context.device, shaderPath);
 
     uint32_t specializationData[2] = { 256, particleCount };
@@ -101,7 +95,6 @@ void FluidParticles::init(
 
     vkDestroyShaderModule(context.device, shaderModule, nullptr);
 
-    // 4. Descriptor Pool (2 bufory SSBO, 4 obrazy STORAGE_IMAGE dla 2 setów)
     VkDescriptorPoolSize poolSizes[2]{};
     poolSizes[0] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2};
     poolSizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  4};
@@ -125,7 +118,6 @@ void FluidParticles::init(
     if (vkAllocateDescriptorSets(context.device, &allocInfo, descriptorSets) != VK_SUCCESS)
         throw std::runtime_error("Blad alokacji descriptorSets w FluidParticles");
 
-    // 5. Konfiguracja i zapis Deskryptorów dla Set 0 (Ping-Pong A) i Set 1 (Ping-Pong B)
     VkDescriptorBufferInfo particleBufInfo{ particles.getBuffer().handle, 0, particles.getBuffer().size };
 
     VkDescriptorImageInfo velAInfo{ VK_NULL_HANDLE, fluid.getVelocityTextureA().view, VK_IMAGE_LAYOUT_GENERAL };
@@ -136,19 +128,16 @@ void FluidParticles::init(
 
     VkWriteDescriptorSet writes[6]{};
 
-    // Set 0 (Ping-Pong A)
     writes[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, descriptorSets[0], 0, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &particleBufInfo, nullptr};
     writes[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, descriptorSets[0], 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  &velAInfo, nullptr, nullptr};
     writes[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, descriptorSets[0], 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  &colAInfo, nullptr, nullptr};
 
-    // Set 1 (Ping-Pong B)
     writes[3] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, descriptorSets[1], 0, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &particleBufInfo, nullptr};
     writes[4] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, descriptorSets[1], 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  &velBInfo, nullptr, nullptr};
     writes[5] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, descriptorSets[1], 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  &colBInfo, nullptr, nullptr};
 
     vkUpdateDescriptorSets(context.device, 6, writes, 0, nullptr);
 
-    // 6. Command Pool, Command Buffer, Fences i Semaphores
     VkCommandPoolCreateInfo cmdPoolInfo{};
     cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -214,7 +203,6 @@ void FluidParticles::update(
 
     vkCmdDispatch(commandBuffer, groupCount, 1, 1);
 
-    // Bariera bufora cząsteczek
     VkBufferMemoryBarrier bufferBarrier{};
     bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
     bufferBarrier.buffer = particles.getBuffer().handle;

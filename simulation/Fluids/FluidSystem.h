@@ -30,8 +30,6 @@ struct FluidPushConstants
     uint32_t windowWidth;
     uint32_t windowHeight;
     uint32_t isMouseDown;
-
-    uint32_t phase;
 };
 
 class FluidSystem

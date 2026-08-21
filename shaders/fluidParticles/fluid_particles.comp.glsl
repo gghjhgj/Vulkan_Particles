@@ -16,13 +16,11 @@ struct Particle
     uint color;
 };
 
-// Binding 0: Cząsteczki (SSBO)
 layout(std430, set = 0, binding = 0) buffer ParticleBuffer
 {
     Particle particles[];
 };
 
-// Binding 1 i 2: Tekstury 2D Płynu (Storage Images Read/Write)
 layout(rg32f, set = 0, binding = 1) uniform image2D inOutVelocity;
 layout(rgba32f, set = 0, binding = 2) uniform image2D inOutColor;
 
@@ -176,7 +174,9 @@ void main()
 
         float denomForce = max(forceRadius * forceRadius * 0.4, 0.0001);
         float denomColor = max(forceRadius * forceRadius * 0.243, 0.0001);
-        float particleWeight = clamp(25000.0 / float(max(PARTICLE_COUNT, 1u)), 0.02, 1.0);
+
+        vec2 fwd = pDelta / particleSpeed;
+        vec2 side = vec2(-fwd.y, fwd.x);
 
         for (int gy = minGrid.y; gy <= maxGrid.y; ++gy)
         {
@@ -191,7 +191,13 @@ void main()
 
                     float forceInf = exp(-(dist * dist) / denomForce);
                     vec2 pDeltaUV = pDelta / screenRes;
-                    vec2 vFromParticle = pDeltaUV * push.splatForce * particleWeight;
+
+                    vec2 toCell = cellPixelPos - prevPos;
+                    float sideDist = dot(toCell, side);
+                    float swirl = clamp(sideDist / max(forceRadius, 0.001), -1.0, 1.0);
+                    vec2 forceDir = fwd * 0.7 + side * (swirl * 1.3);
+
+                    vec2 vFromParticle = forceDir * (length(pDeltaUV) * push.splatForce);
 
                     vec2 currentV = imageLoad(inOutVelocity, coord).xy;
                     vec2 addedV = vFromParticle * forceInf * speedFactor;
@@ -199,24 +205,22 @@ void main()
                     vec2 newV = currentV + addedV;
                     float curSpeed = length(newV);
                     
-                    const float MAX_FLUID_SPEED = 120.0;
+                    const float MAX_FLUID_SPEED = 400.0;
                     if (curSpeed > MAX_FLUID_SPEED) {
                         newV = (newV / curSpeed) * (MAX_FLUID_SPEED + (curSpeed - MAX_FLUID_SPEED) * 0.1);
                     }
 
-                    // Zapis prędkości bezpośrednio do tekstury 2D
                     imageStore(inOutVelocity, coord, vec4(newV, 0.0, 0.0));
 
                     float colorRadius = forceRadius * 0.9;
                     if (dist < colorRadius)
                     {
                         float colorInf = exp(-(dist * dist) / denomColor);
-                        float mixIntensity = clamp(colorInf * 0.65 * (0.1 + 0.9 * speedFactor) * (particleWeight * 2.5), 0.0, 1.0);
+                        float mixIntensity = clamp(colorInf * 0.65 * (0.1 + 0.9 * speedFactor), 0.0, 1.0);
 
                         vec4 currentC = imageLoad(inOutColor, coord);
                         vec3 newC = mix(currentC.rgb, dyeColor, mixIntensity);
 
-                        // Zapis koloru bezpośrednio do tekstury 2D
                         imageStore(inOutColor, coord, vec4(newC, 1.0));
                     }
                 }

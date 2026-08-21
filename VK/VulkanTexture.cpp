@@ -15,7 +15,6 @@ void VulkanTexture::init(
     this->format = format;
     this->currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    // 1. Tworzenie obiektu VkImage
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -28,7 +27,6 @@ void VulkanTexture::init(
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     
-    // Domyślnie dajemy uprawnienia do zapisu/odczytu w compute + próbkowania + transferu
     imageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | 
                       VK_IMAGE_USAGE_SAMPLED_BIT | 
                       VK_IMAGE_USAGE_TRANSFER_DST_BIT | 
@@ -43,7 +41,6 @@ void VulkanTexture::init(
         throw std::runtime_error("Nie udalo sie utworzyc VkImage w VulkanTexture");
     }
 
-    // 2. Alokacja pamięci w VRAM (DEVICE_LOCAL)
     VkMemoryRequirements memReqs;
     vkGetImageMemoryRequirements(context.device, image, &memReqs);
 
@@ -61,7 +58,6 @@ void VulkanTexture::init(
 
     vkBindImageMemory(context.device, image, memory, 0);
 
-    // 3. Tworzenie widoku VkImageView
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = image;
@@ -101,7 +97,6 @@ void VulkanTexture::transitionLayout(
     barrier.subresourceRange.baseArrayLayer = 0;
     barrier.subresourceRange.layerCount = 1;
 
-    // Automatyczne ustawianie masek dostępu w zależności od layoutu
     if (currentLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_GENERAL)
     {
         barrier.srcAccessMask = 0;
