@@ -107,7 +107,12 @@ void main()
     vec2 advV = sampleVelocity(traceUV);
     vec4 advC = sampleColor(traceUV);
 
-    float curlCenter = (getVel(x + 1, y).y - getVel(x - 1, y).y) - (getVel(x, y + 1).x - getVel(x, y - 1).x);
+    vec2 vL = getVel(x - 1, y);
+    vec2 vR = getVel(x + 1, y);
+    vec2 vB = getVel(x, y - 1);
+    vec2 vT = getVel(x, y + 1);
+
+    float curlCenter = (vR.y - vL.y) - (vT.x - vB.x);
     float curlL = abs((getVel(x, y).y - getVel(x - 2, y).y) - (getVel(x - 1, y + 1).x - getVel(x - 1, y - 1).x));
     float curlR = abs((getVel(x + 2, y).y - getVel(x, y).y) - (getVel(x + 1, y + 1).x - getVel(x + 1, y - 1).x));
     float curlB = abs((getVel(x + 1, y - 1).y - getVel(x - 1, y - 1).y) - (getVel(x, y).x - getVel(x, y - 2).x));
@@ -162,11 +167,6 @@ void main()
     outVelocity[id] = advV * push.velocityDissipation;
     outColor[id] = advC * push.densityDissipation;
 
-    float uLeft  = getVel(x - 1, y).x;
-    float uRight = getVel(x + 1, y).x;
-    float vDown  = getVel(x, y - 1).y;
-    float vUp    = getVel(x, y + 1).y;
-    
-    float div = 0.5 * ((uRight - uLeft) + (vUp - vDown));
+    float div = 0.5 * ((vR.x - vL.x) + (vT.y - vB.y));
     outDivergence[id] = clamp(div, -30.0, 30.0);
 }

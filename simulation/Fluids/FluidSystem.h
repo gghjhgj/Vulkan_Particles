@@ -30,6 +30,8 @@ struct FluidPushConstants
     uint32_t windowWidth;
     uint32_t windowHeight;
     uint32_t isMouseDown;
+
+    uint32_t phase;
 };
 
 class FluidSystem
@@ -65,6 +67,7 @@ public:
 
     const VulkanBuffer& getColorBufferA() const { return colorBufferA; }
     const VulkanBuffer& getColorBufferB() const { return colorBufferB; }
+    const VulkanBuffer& getPressureBuffer() const { return pressureBuffer; }
 
     void init(
         VulkanContext &context,
@@ -114,8 +117,7 @@ private:
     VulkanBuffer colorBufferA;
     VulkanBuffer colorBufferB;
 
-    VulkanBuffer pressureBufferA;
-    VulkanBuffer pressureBufferB;
+    VulkanBuffer pressureBuffer;
 
     VulkanBuffer divergenceBuffer;
 
@@ -136,13 +138,8 @@ private:
         VK_NULL_HANDLE,
         VK_NULL_HANDLE};
 
-    VkDescriptorSet jacobiDescriptorSets[2]{
-        VK_NULL_HANDLE,
-        VK_NULL_HANDLE};
-
-    VkDescriptorSet projectDescriptorSets[2]{
-        VK_NULL_HANDLE,
-        VK_NULL_HANDLE};
+    VkDescriptorSet jacobiDescriptorSet{VK_NULL_HANDLE};
+    VkDescriptorSet projectDescriptorSet{VK_NULL_HANDLE};
 
     VkPipeline pipelineAdvect{VK_NULL_HANDLE};
     VkPipeline pipelineJacobi{VK_NULL_HANDLE};
