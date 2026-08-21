@@ -11,28 +11,27 @@ class VulkanContext;
 
 class VulkanBuffer
 {
-    public:
-
+public:
     VkBuffer handle = VK_NULL_HANDLE;
     VkDeviceMemory memory = VK_NULL_HANDLE;
-    void* mappedData = nullptr;
+    void *mappedData = nullptr;
     VkDeviceSize size = 0;
 
-    void init(const VulkanContext& context, 
-              VkDeviceSize size, 
-              VkBufferUsageFlags usage, 
+    void init(const VulkanContext &context,
+              VkDeviceSize size,
+              VkBufferUsageFlags usage,
               VkMemoryPropertyFlags properties,
               bool mapMemory = false);
 
-    void upload(const void* data, VkDeviceSize dataSize);
+    void upload(const void *data, VkDeviceSize dataSize);
 
-    void download(void* dest, VkDeviceSize size);
+    void download(void *dest, VkDeviceSize size);
     template <typename T>
-    void download(std::vector<T>& destinationVector)
+    void download(std::vector<T> &destinationVector)
     {
         VkDeviceSize requestedSize = destinationVector.size() * sizeof(T);
 
-        if(requestedSize > size)
+        if (requestedSize > size)
         {
             std::cerr << "error: target vector bigger than GPU buffer" << std::endl;
             return;
@@ -42,28 +41,24 @@ class VulkanBuffer
 
     void destroy(VkDevice device);
 
-    void initStorage(const VulkanContext& context, VkDeviceSize size, bool mapMemory = true)
-    {
-        init(context, 
-            size, 
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            mapMemory
-        );
-    }
-
-    void initUniform(const VulkanContext& context, VkDeviceSize size, bool mapMemory = true)
+    void initStorage(const VulkanContext &context, VkDeviceSize size, bool mapMemory = true)
     {
         init(context,
-            size,
-            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            mapMemory
-        );
+             size,
+             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+             mapMemory);
     }
 
+    void initUniform(const VulkanContext &context, VkDeviceSize size, bool mapMemory = true)
+    {
+        init(context,
+             size,
+             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+             mapMemory);
+    }
 
-    private:
-
+private:
     uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);
 };

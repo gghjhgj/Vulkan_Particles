@@ -1,13 +1,17 @@
 #pragma once
 
-struct FluidCell
+struct VelocityCell
 {
     float vx;
     float vy;
-    float pressure;
-    float divergence;
+};
+struct ColorCell
+{
     float r;
     float g;
     float b;
     float a;
 };
+
+//presures
+//divergences

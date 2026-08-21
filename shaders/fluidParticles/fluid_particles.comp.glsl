@@ -16,12 +16,14 @@ struct Particle
     uint color;
 };
 
-struct FluidCell
+struct VelocityCell
 {
     float vx;
     float vy;
-    float pressure;
-    float divergence;
+};
+
+struct ColorCell
+{
     float r;
     float g;
     float b;
@@ -33,9 +35,14 @@ layout(std430, set = 0, binding = 0) buffer ParticleBuffer
     Particle particles[];
 };
 
-layout(std430, set = 0, binding = 1) buffer FluidBuffer
+layout(std430, set = 0, binding = 1) buffer VelocityBuffer
 {
-    FluidCell fluidCells[];
+    VelocityCell velocityCells[];
+};
+
+layout(std430, set = 0, binding = 2) buffer ColorBuffer
+{
+    ColorCell colorCells[];
 };
 
 layout(push_constant) uniform Push
@@ -57,11 +64,12 @@ layout(push_constant) uniform Push
     uint isMouseDown;
 } push;
 
-FluidCell getFluidCell(int x, int y)
+vec2 getVelocityCell(int x, int y)
 {
     int clampedX = clamp(x, 0, int(push.simWidth) - 1);
     int clampedY = clamp(y, 0, int(push.simHeight) - 1);
-    return fluidCells[clampedY * int(push.simWidth) + clampedX];
+    int idx = clampedY * int(push.simWidth) + clampedX;
+    return vec2(velocityCells[idx].vx, velocityCells[idx].vy);
 }
 
 vec2 sampleFluidVelocity(vec2 uv)
@@ -75,10 +83,10 @@ vec2 sampleFluidVelocity(vec2 uv)
     ivec2 i1 = clamp(i0 + 1,            ivec2(0), ivec2(maxW, maxH));
     vec2 f = fract(pos);
 
-    vec2 v00 = vec2(getFluidCell(i0.x, i0.y).vx, getFluidCell(i0.x, i0.y).vy);
-    vec2 v10 = vec2(getFluidCell(i1.x, i0.y).vx, getFluidCell(i1.x, i0.y).vy);
-    vec2 v01 = vec2(getFluidCell(i0.x, i1.y).vx, getFluidCell(i0.x, i1.y).vy);
-    vec2 v11 = vec2(getFluidCell(i1.x, i1.y).vx, getFluidCell(i1.x, i1.y).vy);
+    vec2 v00 = getVelocityCell(i0.x, i0.y);
+    vec2 v10 = getVelocityCell(i1.x, i0.y);
+    vec2 v01 = getVelocityCell(i0.x, i1.y);
+    vec2 v11 = getVelocityCell(i1.x, i1.y);
 
     return mix(mix(v00, v10, f.x), mix(v01, v11, f.x), f.y);
 }
@@ -219,7 +227,7 @@ void main()
                     vec2 pDeltaUV = pDelta / screenRes;
                     vec2 vFromParticle = pDeltaUV * push.splatForce * particleWeight;
 
-                    vec2 currentV = vec2(fluidCells[cellIdx].vx, fluidCells[cellIdx].vy);
+                    vec2 currentV = vec2(velocityCells[cellIdx].vx, velocityCells[cellIdx].vy);
                     vec2 addedV = vFromParticle * forceInf * speedFactor;
 
                     vec2 newV = currentV + addedV;
@@ -230,8 +238,8 @@ void main()
                         newV = (newV / speed) * (MAX_FLUID_SPEED + (speed - MAX_FLUID_SPEED) * 0.1);
                     }
 
-                    fluidCells[cellIdx].vx = newV.x;
-                    fluidCells[cellIdx].vy = newV.y;
+                    velocityCells[cellIdx].vx = newV.x;
+                    velocityCells[cellIdx].vy = newV.y;
 
                     float colorRadius = forceRadius * 0.9;
                     if (dist < colorRadius)
@@ -239,10 +247,10 @@ void main()
                         float colorInf = exp(-(dist * dist) / denomColor);
                         float mixIntensity = clamp(colorInf * 0.65 * (0.1 + 0.9 * speedFactor) * (particleWeight * 2.5), 0.0, 1.0);
 
-                        fluidCells[cellIdx].r = mix(fluidCells[cellIdx].r, dyeColor.r, mixIntensity);
-                        fluidCells[cellIdx].g = mix(fluidCells[cellIdx].g, dyeColor.g, mixIntensity);
-                        fluidCells[cellIdx].b = mix(fluidCells[cellIdx].b, dyeColor.b, mixIntensity);
-                        fluidCells[cellIdx].a = 1.0;
+                        colorCells[cellIdx].r = mix(colorCells[cellIdx].r, dyeColor.r, mixIntensity);
+                        colorCells[cellIdx].g = mix(colorCells[cellIdx].g, dyeColor.g, mixIntensity);
+                        colorCells[cellIdx].b = mix(colorCells[cellIdx].b, dyeColor.b, mixIntensity);
+                        colorCells[cellIdx].a = 1.0;
                     }
                 }
             }

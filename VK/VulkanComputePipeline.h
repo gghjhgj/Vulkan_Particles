@@ -25,7 +25,8 @@ public:
 
     void bindBuffers(
         const VulkanContext& context,
-        const std::vector<VulkanBuffer>& buffers
+        const std::vector<VulkanBuffer>& buffers,
+        uint32_t setIndex = 0
     );
 
     void dispatch(

@@ -69,13 +69,15 @@ public:
 
 private:
     void createSurface(sf::Window& window);
+
     void createParticlePipeline();
     void createParticleDescriptors();
+    void updateParticleDescriptors();
     
     void createFluidPipeline();
     void createFluidDescriptors();
+    void updateFluidDescriptors();
 
-private:
     VulkanContext* vkContext = nullptr;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     VulkanSwapchain swapchain;

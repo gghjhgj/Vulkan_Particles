@@ -226,24 +226,32 @@ void VulkanComputePipeline::init(
 
 void VulkanComputePipeline::bindBuffers(
     const VulkanContext &context,
-    const std::vector<VulkanBuffer> &buffers)
+    const std::vector<VulkanBuffer> &buffers,
+    uint32_t setIndex)
 {
-    if (descriptorSets.empty())
+    if (descriptorSets.size() <= setIndex)
     {
+        uint32_t currentSize = static_cast<uint32_t>(descriptorSets.size());
+        uint32_t countToAllocate = (setIndex + 1) - currentSize;
+
+        std::vector<VkDescriptorSetLayout> layouts(countToAllocate, descriptorSetLayout);
+
         VkDescriptorSetAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         allocInfo.descriptorPool = descriptorPool;
-        allocInfo.descriptorSetCount = 1;
-        allocInfo.pSetLayouts = &descriptorSetLayout;
+        allocInfo.descriptorSetCount = countToAllocate;
+        allocInfo.pSetLayouts = layouts.data();
 
-        descriptorSets.resize(1);
+        std::vector<VkDescriptorSet> allocatedSets(countToAllocate);
         if (vkAllocateDescriptorSets(
                 context.device,
                 &allocInfo,
-                descriptorSets.data()) != VK_SUCCESS)
+                allocatedSets.data()) != VK_SUCCESS)
         {
-            throw std::runtime_error("error: couldn't allocate descriptor set");
+            throw std::runtime_error("error: couldn't allocate descriptor set for index " + std::to_string(setIndex));
         }
+
+        descriptorSets.insert(descriptorSets.end(), allocatedSets.begin(), allocatedSets.end());
     }
 
     std::vector<VkDescriptorBufferInfo> bufferInfos(buffers.size());
@@ -257,7 +265,7 @@ void VulkanComputePipeline::bindBuffers(
 
         descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[i].pNext = nullptr;
-        descriptorWrites[i].dstSet = descriptorSets[0];
+        descriptorWrites[i].dstSet = descriptorSets[setIndex];
         descriptorWrites[i].dstBinding = static_cast<uint32_t>(i);
         descriptorWrites[i].dstArrayElement = 0;
         descriptorWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;

@@ -16,26 +16,28 @@ struct Particle
     uint color;
 };
 
-struct FluidCell
-{
+struct VelocityCell {
     float vx;
     float vy;
-    float pressure;
-    float divergence;
+};
+
+struct ColorCell {
     float r;
     float g;
     float b;
     float a;
 };
 
-layout(std430, set = 0, binding = 0) buffer ParticleBuffer
-{
+layout(std430, set = 0, binding = 0) buffer ParticleBuffer {
     Particle particles[];
 };
 
-layout(std430, set = 0, binding = 1) buffer FluidBuffer
-{
-    FluidCell fluidCells[];
+layout(std430, set = 0, binding = 1) buffer VelocityBuffer {
+    VelocityCell velocityCells[];
+};
+
+layout(std430, set = 0, binding = 2) buffer ColorBuffer {
+    ColorCell colorCells[];
 };
 
 layout(push_constant) uniform Push
@@ -95,11 +97,8 @@ float calculateSongPhase()
 {
     float rmsPower = smoothstep(0.06, 0.22, push.rms);
     float energySurge = max(push.shortEnergy - push.longEnergy * 0.75, 0.0) * 1.5;
-    
     float bassWeight = (push.shortBass * 0.65 + push.bass * 0.35) * (1.0 + push.bassDeviation * 0.6);
-    
     float tension = (push.flux * 0.45) + (push.treble * 0.35) + max(push.shortMid - push.longMid * 0.7, 0.0) * 0.4;
-    
     float transientPower = max(push.impact * 0.9, push.bassEvent * 1.1);
     
     float phase = (push.longEnergy * 0.25) + (rmsPower * 0.25) + (push.shortEnergy * 0.20) + (bassWeight * 0.30);
@@ -155,12 +154,10 @@ vec3 getVibrantAudioColor(inout float storedHue, uint id, float particleSpeed, f
     float snare = smoothstep(0.40, 0.90, push.impact * push.mid); 
     
     float rhythmOffset = (snare * 0.02) - (kick * 0.06);
-    
     float speedAccent = smoothstep(2.0, 20.0, particleSpeed) * 0.07;
     float freqShade = (push.treble * 0.03) - (push.shortBass * 0.05);
 
     float displayHue = fract(storedHue + rhythmOffset + freqShade - speedAccent);
-
     float brightness = mix(0.85, 1.0, smoothstep(0.0, 15.0, particleSpeed));
     
     float kickFlash = smoothstep(0.55, 0.95, max(push.bassEvent, push.impact));
@@ -325,7 +322,6 @@ void main()
     if (dist > safeRadius) 
     {
         float excess = dist - safeRadius;
-        
         if (radialSpeed > 0.0) {
             vel -= radialVel * clamp(excess / 140.0, 0.0, 0.50);
         }
@@ -344,7 +340,7 @@ void main()
     }
 
     vec2 prevPos = pos;
-    pos += vel * (push.dt * 60.0);;
+    pos += vel * (push.dt * 60.0);
 
     if (pos.x < 0.0 || pos.x >= screenRes.x) { vel.x *= -0.5; pos.x = clamp(pos.x, 0.0, screenRes.x - 1.0); }
     if (pos.y < 0.0 || pos.y >= screenRes.y) { vel.y *= -0.5; pos.y = clamp(pos.y, 0.0, screenRes.y - 1.0); }
@@ -385,7 +381,6 @@ void main()
             for (int gx = minGrid.x; gx <= maxGrid.x; ++gx)
             {
                 vec2 cellPixelPos = ((vec2(gx, gy) + 0.5) / simRes) * screenRes;
-                
                 float dSeg = distToSegment(cellPixelPos, prevPos, pos);
 
                 if (dSeg < forceRadius)
@@ -393,11 +388,10 @@ void main()
                     int cellIdx = gy * int(push.simWidth) + gx;
 
                     float forceInf = exp(-(dSeg * dSeg) / denomForce);
-                    
                     vec2 pDeltaUV = pDelta / screenRes;
                     vec2 vFromParticle = pDeltaUV * push.splatForce * particleWeight;
 
-                    vec2 currentV = vec2(fluidCells[cellIdx].vx, fluidCells[cellIdx].vy);
+                    vec2 currentV = vec2(velocityCells[cellIdx].vx, velocityCells[cellIdx].vy);
                     vec2 addedV = vFromParticle * forceInf * speedFactor;
 
                     vec2 newV = currentV + addedV;
@@ -408,20 +402,19 @@ void main()
                         newV = (newV / curSpeed) * (MAX_FLUID_SPEED + (curSpeed - MAX_FLUID_SPEED) * 0.1);
                     }
 
-                    fluidCells[cellIdx].vx = newV.x;
-                    fluidCells[cellIdx].vy = newV.y;
+                    velocityCells[cellIdx].vx = newV.x;
+                    velocityCells[cellIdx].vy = newV.y;
 
                     float colorRadius = forceRadius * 0.9;
                     if (dSeg < colorRadius)
                     {
                         float colorInf = exp(-(dSeg * dSeg) / denomColor);
-                        
                         float mixIntensity = clamp(colorInf * 0.32 * (0.35 + 0.65 * speedFactor) * (particleWeight * 1.9), 0.0, 0.65);
 
-                        fluidCells[cellIdx].r = mix(fluidCells[cellIdx].r, dyeColor.r, mixIntensity);
-                        fluidCells[cellIdx].g = mix(fluidCells[cellIdx].g, dyeColor.g, mixIntensity);
-                        fluidCells[cellIdx].b = mix(fluidCells[cellIdx].b, dyeColor.b, mixIntensity);
-                        fluidCells[cellIdx].a = 1.0;
+                        colorCells[cellIdx].r = mix(colorCells[cellIdx].r, dyeColor.r, mixIntensity);
+                        colorCells[cellIdx].g = mix(colorCells[cellIdx].g, dyeColor.g, mixIntensity);
+                        colorCells[cellIdx].b = mix(colorCells[cellIdx].b, dyeColor.b, mixIntensity);
+                        colorCells[cellIdx].a = 1.0;
                     }
                 }
             }

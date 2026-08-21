@@ -195,15 +195,60 @@ void Renderer::createParticleDescriptors()
     {
         throw std::runtime_error("Failed to allocate particle descriptor sets.");
     }
+
+    if (particleBuffer != nullptr)
+    {
+        updateParticleDescriptors();
+    }
+}
+
+void Renderer::updateParticleDescriptors()
+{
+    if (!particleBuffer || particleDescriptorSets.empty())
+        return;
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = particleBuffer->handle;
+        bufferInfo.offset = 0;
+        bufferInfo.range = particleBuffer->size;
+
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = particleDescriptorSets[i];
+        write.dstBinding = 0;
+        write.dstArrayElement = 0;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write.descriptorCount = 1;
+        write.pBufferInfo = &bufferInfo;
+
+        vkUpdateDescriptorSets(
+            vkContext->device,
+            1,
+            &write,
+            0,
+            nullptr);
+    }
 }
 
 void Renderer::setParticleBuffer(
     const VulkanBuffer &buffer,
     uint32_t count)
 {
+    if (vkContext && vkContext->device != VK_NULL_HANDLE)
+    {
+        vkDeviceWaitIdle(vkContext->device);
+    }
+
     particleBuffer = &buffer;
     particleCount = count;
     particlesConfigured = true;
+
+    if (!particleDescriptorSets.empty())
+    {
+        updateParticleDescriptors();
+    }
 }
 
 void Renderer::createFluidPipeline()
@@ -279,6 +324,41 @@ void Renderer::createFluidDescriptors()
     {
         throw std::runtime_error("Failed to allocate fluid descriptor set.");
     }
+
+    if (fluidBuffer != nullptr)
+    {
+        updateFluidDescriptors();
+    }
+}
+
+void Renderer::updateFluidDescriptors()
+{
+    if (!fluidBuffer || fluidDescriptorSet.empty())
+        return;
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = fluidBuffer->handle;
+        bufferInfo.offset = 0;
+        bufferInfo.range = fluidBuffer->size;
+
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = fluidDescriptorSet[i];
+        write.dstBinding = 0;
+        write.dstArrayElement = 0;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write.descriptorCount = 1;
+        write.pBufferInfo = &bufferInfo;
+
+        vkUpdateDescriptorSets(
+            vkContext->device,
+            1,
+            &write,
+            0,
+            nullptr);
+    }
 }
 
 void Renderer::setFluidBuffer(
@@ -286,10 +366,20 @@ void Renderer::setFluidBuffer(
     uint32_t simWidth,
     uint32_t simHeight)
 {
+    if (vkContext && vkContext->device != VK_NULL_HANDLE)
+    {
+        vkDeviceWaitIdle(vkContext->device);
+    }
+    
     fluidBuffer = &buffer;
     fluidSimWidth = simWidth;
     fluidSimHeight = simHeight;
     fluidConfigured = true;
+
+    if (!fluidDescriptorSet.empty())
+    {
+        updateFluidDescriptors();
+    }
 }
 
 void Renderer::render(ImGuiManager &imgui)
@@ -309,54 +399,6 @@ void Renderer::render(ImGuiManager &imgui)
     if (result != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to wait for frame fence.");
-    }
-
-    if (fluidConfigured && fluidBuffer != nullptr)
-    {
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = fluidBuffer->handle;
-        bufferInfo.offset = 0;
-        bufferInfo.range = fluidBuffer->size;
-
-        VkWriteDescriptorSet write{};
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = fluidDescriptorSet[currentFrame];
-        write.dstBinding = 0;
-        write.dstArrayElement = 0;
-        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        write.descriptorCount = 1;
-        write.pBufferInfo = &bufferInfo;
-
-        vkUpdateDescriptorSets(
-            vkContext->device,
-            1,
-            &write,
-            0,
-            nullptr);
-    }
-
-    if (particlesConfigured && particleBuffer != nullptr)
-    {
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = particleBuffer->handle;
-        bufferInfo.offset = 0;
-        bufferInfo.range = particleBuffer->size;
-
-        VkWriteDescriptorSet write{};
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = particleDescriptorSets[currentFrame];
-        write.dstBinding = 0;
-        write.dstArrayElement = 0;
-        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        write.descriptorCount = 1;
-        write.pBufferInfo = &bufferInfo;
-
-        vkUpdateDescriptorSets(
-            vkContext->device,
-            1,
-            &write,
-            0,
-            nullptr);
     }
 
     uint32_t imageIndex = 0;
@@ -645,8 +687,8 @@ void Renderer::render(ImGuiManager &imgui)
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
     presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &swapchain.handle;
     presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pSwapchains = &swapchain.handle;
 
     result = vkQueuePresentKHR(vkContext->graphicsQueue, &presentInfo);
 

@@ -3,19 +3,13 @@
 layout(location = 0) in vec2 inUV;
 layout(location = 0) out vec4 outColor;
 
-struct FluidCell
-{
-    float vx;
-    float vy;
-    float pressure;
-    float divergence;
+struct ColorCell {
     vec4 color;
 };
 
-layout(std430, binding = 0) readonly buffer FluidBuffer
-{
-    FluidCell cells[];
-};
+layout(std430, set = 0, binding = 0) readonly buffer ColorBuffer {
+    ColorCell cells[];
+} colorBuffer;
 
 layout(push_constant) uniform Push
 {
@@ -36,10 +30,10 @@ vec4 sampleFluid(vec2 uv)
     ivec2 i1 = clamp(i0 + 1,             ivec2(0), ivec2(maxW, maxH));
     vec2 f = fract(pos);
 
-    vec4 c00 = cells[i0.y * int(push.simWidth) + i0.x].color;
-    vec4 c10 = cells[i0.y * int(push.simWidth) + i1.x].color;
-    vec4 c01 = cells[i1.y * int(push.simWidth) + i0.x].color;
-    vec4 c11 = cells[i1.y * int(push.simWidth) + i1.x].color;
+    vec4 c00 = colorBuffer.cells[i0.y * int(push.simWidth) + i0.x].color;
+    vec4 c10 = colorBuffer.cells[i0.y * int(push.simWidth) + i1.x].color;
+    vec4 c01 = colorBuffer.cells[i1.y * int(push.simWidth) + i0.x].color;
+    vec4 c11 = colorBuffer.cells[i1.y * int(push.simWidth) + i1.x].color;
 
     return mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y);
 }

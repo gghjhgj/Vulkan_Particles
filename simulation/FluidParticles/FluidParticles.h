@@ -23,12 +23,11 @@ public:
         ParticleSystem& particles,
         FluidSystem& fluid,
         const void* pushData,
-        uint32_t pushConstantSize
+        uint32_t pushConstantSize,
+        VkSemaphore waitSemaphore = VK_NULL_HANDLE
     );
 
-    void destroy(
-        VkDevice device
-    );
+    void destroy(VkDevice device);
 
     VkSemaphore getComputeFinishedSemaphore() const;
 

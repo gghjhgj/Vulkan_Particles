@@ -31,8 +31,7 @@ int main()
         std::thread audioThread;
 
         sf::Window window(
-            sf::VideoMode({Config::window.width,
-                           Config::window.height}),
+            sf::VideoMode({Config::window.width, Config::window.height}),
             "Simulation System",
             sf::Style::Default,
             sf::State::Windowed);
@@ -51,10 +50,7 @@ int main()
         renderer.init(vulkanContext, window);
 
         ImGuiManager imgui;
-        imgui.init(
-            vulkanContext,
-            window,
-            renderer.getSwapchainFormat());
+        imgui.init(vulkanContext, window, renderer.getSwapchainFormat());
 
         StartingScreen startingScreen;
         ParticleSystem particles;
@@ -95,131 +91,67 @@ int main()
                 if (controlMode != ControlMode::None)
                 {
                     simulationStarted = true;
+                    lastMousePos = sf::Mouse::getPosition(window);
 
                     if (controlMode == ControlMode::MouseParticles || controlMode == ControlMode::MusicParticles)
                     {
-                        const char *shaderPath =
-                            controlMode == ControlMode::MouseParticles
-                                ? "shaders/particles/particle.comp.spv"
-                                : "shaders/particles/music.comp.spv";
+                        const char *shaderPath = controlMode == ControlMode::MouseParticles
+                            ? "shaders/particles/particle.comp.spv"
+                            : "shaders/particles/music.comp.spv";
 
-                        uint32_t pushConstantSize =
-                            controlMode == ControlMode::MouseParticles
-                                ? sizeof(ComputePush)
-                                : sizeof(MusicPush::Data);
+                        uint32_t pushConstantSize = controlMode == ControlMode::MouseParticles
+                            ? sizeof(ComputePush)
+                            : sizeof(MusicPush::Data);
 
-                        particles.init(
-                            vulkanContext,
-                            Config::particles.count,
-                            Config::window.width,
-                            Config::window.height,
-                            shaderPath,
-                            pushConstantSize);
-
-                        renderer.setParticleBuffer(
-                            particles.getBuffer(),
-                            particles.getCount());
-
-                        renderer.setComputeFinishedSemaphore(
-                            particles.getComputeFinishedSemaphore());
+                        particles.init(vulkanContext, Config::particles.count, Config::window.width, Config::window.height, shaderPath, pushConstantSize);
+                        
+                        renderer.setParticleBuffer(particles.getBuffer(), particles.getCount());
+                        renderer.setComputeFinishedSemaphore(particles.getComputeFinishedSemaphore());
 
                         if (controlMode == ControlMode::MusicParticles)
                         {
                             audioConfig.load("audio/AudioConfig/AudioConfig.ini");
-
                             if (!wasapiCapture.init())
-                            {
                                 throw std::runtime_error("Failed to initialize WASAPI capture.");
-                            }
 
-                            audioThread = std::thread(
-                                [&wasapiCapture]()
-                                {
-                                    wasapiCapture.run();
-                                });
+                            audioThread = std::thread([&wasapiCapture]() { wasapiCapture.run(); });
                         }
                     }
                     else if (controlMode == ControlMode::FluidMouse)
                     {
-                        fluid.init(
-                            vulkanContext,
-                            Config::fluid.simWidth,
-                            Config::fluid.simHeight,
-                            "shaders/fluids/fluid.comp.spv",
-                            sizeof(FluidPushConstants));
-
-                        renderer.setFluidBuffer(
-                            fluid.getActiveBuffer(),
-                            Config::fluid.simWidth,
-                            Config::fluid.simHeight);
-
-                        renderer.setComputeFinishedSemaphore(
-                            fluid.getComputeFinishedSemaphore());
+                        fluid.init(vulkanContext, Config::fluid.simWidth, Config::fluid.simHeight, "shaders/fluids/fluid.comp.spv", sizeof(FluidPushConstants));
+                        
+                        renderer.setFluidBuffer(fluid.getActiveBuffer(), Config::fluid.simWidth, Config::fluid.simHeight);
+                        renderer.setComputeFinishedSemaphore(fluid.getComputeFinishedSemaphore());
                     }
                     else if (controlMode == ControlMode::FluidParticles || controlMode == ControlMode::FluidParticlesMusic)
                     {
-                        fluid.init(
-                            vulkanContext,
-                            Config::fluid.simWidth,
-                            Config::fluid.simHeight,
-                            "shaders/fluids/fluid.comp.spv",
-                            sizeof(FluidPushConstants));
+                        fluid.init(vulkanContext, Config::fluid.simWidth, Config::fluid.simHeight, "shaders/fluids/fluid.comp.spv", sizeof(FluidPushConstants));
+                        particles.init(vulkanContext, Config::particles.count, Config::window.width, Config::window.height,
+                            controlMode == ControlMode::FluidParticles ? "shaders/particles/particle.comp.spv" : "shaders/particles/music.comp.spv",
+                            controlMode == ControlMode::FluidParticles ? sizeof(ComputePush) : sizeof(MusicPush::Data));
 
-                        particles.init(
-                            vulkanContext,
-                            Config::particles.count,
-                            Config::window.width,
-                            Config::window.height,
-                            controlMode == ControlMode::FluidParticles
-                                ? "shaders/particles/particle.comp.spv"
-                                : "shaders/particles/music.comp.spv",
-                            controlMode == ControlMode::FluidParticles
-                                ? sizeof(ComputePush)
-                                : sizeof(MusicPush::Data));
+                        const char *shaderPath = controlMode == ControlMode::FluidParticles
+                            ? "shaders/fluidParticles/fluid_particles.comp.spv"
+                            : "shaders/fluidParticles/fluid_particles_music.comp.spv";
 
-                        const char *shaderPath =
-                            controlMode == ControlMode::FluidParticles
-                                ? "shaders/fluidParticles/fluid_particles.comp.spv"
-                                : "shaders/fluidParticles/fluid_particles_music.comp.spv";
+                        uint32_t pushConstantSize = controlMode == ControlMode::FluidParticles
+                            ? sizeof(FluidPushConstants)
+                            : sizeof(FluidParticlesMusicPushConstants::Data);
 
-                        uint32_t pushConstantSize =
-                            controlMode == ControlMode::FluidParticles
-                                ? sizeof(FluidPushConstants)
-                                : sizeof(FluidParticlesMusicPushConstants::Data);
-
-                        fluidParticles.init(
-                            vulkanContext,
-                            particles,
-                            fluid,
-                            shaderPath,
-                            pushConstantSize);
-
-                        renderer.setParticleBuffer(
-                            particles.getBuffer(),
-                            particles.getCount());
-
-                        renderer.setFluidBuffer(
-                            fluid.getActiveBuffer(),
-                            Config::fluid.simWidth,
-                            Config::fluid.simHeight);
-
-                        renderer.setComputeFinishedSemaphore(
-                            fluid.getComputeFinishedSemaphore());
+                        fluidParticles.init(vulkanContext, particles, fluid, shaderPath, pushConstantSize);
+                        
+                        renderer.setParticleBuffer(particles.getBuffer(), particles.getCount());
+                        renderer.setFluidBuffer(fluid.getActiveBuffer(), Config::fluid.simWidth, Config::fluid.simHeight);
+                        renderer.setComputeFinishedSemaphore(fluid.getComputeFinishedSemaphore());
 
                         if (controlMode == ControlMode::FluidParticlesMusic)
                         {
                             audioConfig.load("audio/AudioConfig/AudioConfig.ini");
-
                             if (!wasapiCapture.init())
-                            {
                                 throw std::runtime_error("Failed to initialize WASAPI capture.");
-                            }
 
-                            audioThread = std::thread(
-                                [&wasapiCapture]()
-                                {
-                                    wasapiCapture.run();
-                                });
+                            audioThread = std::thread([&wasapiCapture]() { wasapiCapture.run(); });
                         }
                     }
                 }
@@ -233,19 +165,12 @@ int main()
                     push.mouseX = static_cast<float>(mousePos.x);
                     push.mouseY = static_cast<float>(mousePos.y);
 
-                    particles.update(
-                        vulkanContext,
-                        &push,
-                        sizeof(push));
+                    particles.update(vulkanContext, &push, sizeof(push));
                 }
                 else if (controlMode == ControlMode::MusicParticles)
                 {
                     const MusicPush::Data &push = wasapiCapture.getMusicPush();
-                    //MusicPush::printData(push);
-                    particles.update(
-                        vulkanContext,
-                        &push,
-                        sizeof(push));
+                    particles.update(vulkanContext, &push, sizeof(push));
                 }
                 else if (controlMode == ControlMode::FluidMouse)
                 {
@@ -266,15 +191,7 @@ int main()
                     push.simHeight = Config::fluid.simHeight;
                     push.isMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) ? 1 : 0;
 
-                    fluid.update(
-                        vulkanContext,
-                        &push,
-                        sizeof(FluidPushConstants));
-
-                    renderer.setFluidBuffer(
-                        fluid.getActiveBuffer(),
-                        Config::fluid.simWidth,
-                        Config::fluid.simHeight);
+                    fluid.update(vulkanContext, &push, sizeof(FluidPushConstants));
                 }
                 else if (controlMode == ControlMode::FluidParticles)
                 {
@@ -295,33 +212,14 @@ int main()
                     push.simHeight = Config::fluid.simHeight;
                     push.isMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) ? 1 : 0;
 
-                    fluidParticles.update(
-                        vulkanContext,
-                        particles,
-                        fluid,
-                        &push,
-                        sizeof(FluidPushConstants));
-
-                    fluid.update(
-                        vulkanContext,
-                        &push,
-                        sizeof(FluidPushConstants),
-                        fluidParticles.getComputeFinishedSemaphore());
-
-                    renderer.setFluidBuffer(
-                        fluid.getActiveBuffer(),
-                        Config::fluid.simWidth,
-                        Config::fluid.simHeight);
+                    fluidParticles.update(vulkanContext, particles, fluid, &push, sizeof(FluidPushConstants));
+                    fluid.update(vulkanContext, &push, sizeof(FluidPushConstants), fluidParticles.getComputeFinishedSemaphore());
                 }
                 else if (controlMode == ControlMode::FluidParticlesMusic)
                 {
                     const MusicPush::Data &musicData = wasapiCapture.getMusicPush();
 
                     FluidPushConstants fluidPush{};
-                    fluidPush.mouseX = 0.0f;
-                    fluidPush.mouseY = 0.0f;
-                    fluidPush.prevMouseX = 0.0f;
-                    fluidPush.prevMouseY = 0.0f;
                     fluidPush.dt = dt;
                     fluidPush.splatRadius = Config::fluid.splatRadius;
                     fluidPush.splatForce = Config::fluid.splatForce;
@@ -332,46 +230,26 @@ int main()
                     fluidPush.windowHeight = Config::window.height;
                     fluidPush.simWidth = Config::fluid.simWidth;
                     fluidPush.simHeight = Config::fluid.simHeight;
-                    fluidPush.isMouseDown = 0;
 
-                    fluidParticlesMusicPush.update(
-                        musicData,
-                        dt,
-                        Config::fluid.splatRadius,
-                        Config::fluid.splatForce,
-                        Config::fluid.velocityDissipation,
-                        Config::fluid.densityDissipation,
-                        Config::fluid.vorticity,
-                        Config::fluid.simWidth,
-                        Config::fluid.simHeight,
-                        Config::window.width,
-                        Config::window.height);
+                    fluidParticlesMusicPush.update(musicData, dt, Config::fluid.splatRadius, Config::fluid.splatForce,
+                        Config::fluid.velocityDissipation, Config::fluid.densityDissipation, Config::fluid.vorticity,
+                        Config::fluid.simWidth, Config::fluid.simHeight, Config::window.width, Config::window.height);
 
                     const auto &fpData = fluidParticlesMusicPush.get();
 
-                    fluidParticles.update(
-                        vulkanContext,
-                        particles,
-                        fluid,
-                        &fpData,
-                        sizeof(FluidParticlesMusicPushConstants::Data));
-
-                    fluid.update(
-                        vulkanContext,
-                        &fluidPush,
-                        sizeof(FluidPushConstants),
-                        fluidParticles.getComputeFinishedSemaphore());
-
-                    renderer.setFluidBuffer(
-                        fluid.getActiveBuffer(),
-                        Config::fluid.simWidth,
-                        Config::fluid.simHeight);
+                    fluidParticles.update(vulkanContext, particles, fluid, &fpData, sizeof(FluidParticlesMusicPushConstants::Data));
+                    fluid.update(vulkanContext, &fluidPush, sizeof(FluidPushConstants), fluidParticles.getComputeFinishedSemaphore());
                 }
             }
 
             lastMousePos = mousePos;
-
             renderer.render(imgui);
+        }
+
+        wasapiCapture.stop();
+        if (audioThread.joinable())
+        {
+            audioThread.join();
         }
 
         vkDeviceWaitIdle(vulkanContext.device);
@@ -384,9 +262,9 @@ int main()
         }
         else if (controlMode == ControlMode::FluidParticles || controlMode == ControlMode::FluidParticlesMusic)
         {
-            fluid.destroy(vulkanContext.device);
-            particles.destroy(vulkanContext.device);
             fluidParticles.destroy(vulkanContext.device);
+            particles.destroy(vulkanContext.device);
+            fluid.destroy(vulkanContext.device);
         }
         else if (controlMode == ControlMode::MouseParticles || controlMode == ControlMode::MusicParticles)
         {
@@ -398,11 +276,7 @@ int main()
     }
     catch (const std::exception &e)
     {
-        std::cerr
-            << "FATAL ERROR: "
-            << e.what()
-            << '\n';
-
+        std::cerr << "FATAL ERROR: " << e.what() << '\n';
         return 1;
     }
 
