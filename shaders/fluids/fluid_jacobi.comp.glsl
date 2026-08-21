@@ -1,8 +1,9 @@
 #version 450
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(std430, binding = 0) buffer PressureBuffer { float pressure[]; };
-layout(std430, binding = 1) readonly buffer DivIn { float inDivergence[]; };
+// In-Place Read/Write Image
+layout(r32f, binding = 0) uniform image2D imgPressure;
+layout(r32f, binding = 1) readonly uniform image2D imgDivergence;
 
 layout(push_constant) uniform Push
 {
@@ -24,11 +25,10 @@ layout(push_constant) uniform Push
     uint phase;
 } push;
 
-float getP(int x, int y)
+float getP(ivec2 p)
 {
-    x = clamp(x, 0, int(push.simWidth - 1));
-    y = clamp(y, 0, int(push.simHeight - 1));
-    return pressure[y * int(push.simWidth) + x]; 
+    p = clamp(p, ivec2(0), ivec2(int(push.simWidth - 1), int(push.simHeight - 1)));
+    return imageLoad(imgPressure, p).r;
 }
 
 void main()
@@ -40,20 +40,20 @@ void main()
 
     if (x >= int(push.simWidth) || y >= int(push.simHeight)) return;
 
-    uint id = uint(y) * push.simWidth + uint(x);
+    ivec2 coord = ivec2(x, y);
 
-    float pL = getP(x - 1, y);
-    float pR = getP(x + 1, y);
-    float pB = getP(x, y - 1);
-    float pT = getP(x, y + 1);
+    float pL = getP(coord + ivec2(-1, 0));
+    float pR = getP(coord + ivec2(1, 0));
+    float pB = getP(coord + ivec2(0, -1));
+    float pT = getP(coord + ivec2(0, 1));
 
-    float div = inDivergence[id];
+    float div = imageLoad(imgDivergence, coord).r;
 
-    float pOld = pressure[id];
-
+    float pOld = imageLoad(imgPressure, coord).r;
     float pNew = (pL + pR + pB + pT - div) * 0.25;
 
-    const float omega = 1.2;
+    const float omega = 1.25;
+    float pFinal = pOld + omega * (pNew - pOld);
 
-    pressure[id] = pOld + omega * (pNew - pOld);
+    imageStore(imgPressure, coord, vec4(pFinal, 0.0, 0.0, 0.0));
 }

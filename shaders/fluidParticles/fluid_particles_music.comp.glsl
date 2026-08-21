@@ -16,29 +16,14 @@ struct Particle
     uint color;
 };
 
-struct VelocityCell {
-    float vx;
-    float vy;
-};
-
-struct ColorCell {
-    float r;
-    float g;
-    float b;
-    float a;
-};
-
+// Binding 0: Cząsteczki
 layout(std430, set = 0, binding = 0) buffer ParticleBuffer {
     Particle particles[];
 };
 
-layout(std430, set = 0, binding = 1) buffer VelocityBuffer {
-    VelocityCell velocityCells[];
-};
-
-layout(std430, set = 0, binding = 2) buffer ColorBuffer {
-    ColorCell colorCells[];
-};
+// Binding 1 i 2: Tekstury Płynu (Storage Images)
+layout(rg32f, set = 0, binding = 1) uniform image2D inOutVelocity;
+layout(rgba32f, set = 0, binding = 2) uniform image2D inOutColor;
 
 layout(push_constant) uniform Push
 {
@@ -136,14 +121,9 @@ float getRichMoodHue(float songPhase, float audioCentroid)
 vec3 getVibrantAudioColor(inout float storedHue, uint id, float particleSpeed, float songPhase)
 {
     uint strand = id % 4u;
-    float strandShift = 0.0;
-    if (strand == 0u) strandShift = -0.06; 
-    else if (strand == 1u) strandShift = 0.0;  
-    else if (strand == 2u) strandShift = 0.05; 
-    else strandShift = 0.09;                  
+    float strandShift = (strand == 0u) ? -0.06 : ((strand == 1u) ? 0.0 : ((strand == 2u) ? 0.05 : 0.09));
 
     float targetBaseHue = getRichMoodHue(songPhase, push.shortCentroid) + strandShift;
-    
     float activity = max(push.onset, max(push.flux, push.impact));
     float lerpSpeed = mix(0.007, 0.10, activity); 
     
@@ -218,8 +198,7 @@ void main()
 
     float peakTrigger = max(push.onset * 1.3, push.beat);
     float bassSurge = push.bassEvent * (1.0 + push.bassDeviation * 1.4);
-    float energyContext = max(push.impact, bassSurge) + push.flux * 0.6;
-    float burstEnergy = energyContext * peakTrigger;
+    float burstEnergy = (max(push.impact, bassSurge) + push.flux * 0.6) * peakTrigger;
 
     float randVal = random(float(id) * 12.9898 + push.rms * 78.233);
     float pCount = float(max(PARTICLE_COUNT, 1u));
@@ -228,14 +207,12 @@ void main()
     float burstSpawnProb = mix(0.08, 0.35, songPhase); 
 
     float burstThreshold = mix(0.85, 1.55, smoothstep(0.35, 0.90, push.longEnergy));
-    float burstFactor = smoothstep(burstThreshold, burstThreshold + 0.6, burstEnergy);
-    burstFactor = pow(burstFactor, 3.0) * (songPhase * songPhase);
+    float burstFactor = pow(smoothstep(burstThreshold, burstThreshold + 0.6, burstEnergy), 3.0) * (songPhase * songPhase);
 
     float rawDrop = max(push.impact * 0.75, max(push.bassEvent, push.onset));
     float dropSignal = smoothstep(0.40, 0.95, rawDrop) * dynamicVolume * (0.2 + 0.8 * songPhase);
 
     float baseTeleportProb = mix(ambientSpawnProb * dropSignal, burstSpawnProb, burstFactor);
-    
     float distFactor = clamp(dist / (screenRes.y * 0.85), 0.0, 1.0);
     float finalProbability = baseTeleportProb * (0.04 + 1.6 * (distFactor * distFactor));
 
@@ -263,7 +240,6 @@ void main()
     vec2 tangent = vec2(-dir.y, dir.x);
 
     float constantExpansion = dynamicVolume * 0.20 * moodScale;
-    
     float vocalDynamics = max(push.shortMid - push.longMid * 0.65, 0.0) * 1.6;
     float vocalPulse = (vocalDynamics + push.mid * 0.25 + push.shortEnergy * 0.15) * dynamicVolume;
     
@@ -271,53 +247,43 @@ void main()
     float pulse = (constantExpansion + dynamicBassPunch * dynamicVolume + vocalPulse * 1.45) * moodScale;
     
     float vocalColorShift = abs(push.shortCentroid - 0.5) * 2.0;
-    float bassDeviationFactor = push.bassDeviation * 1.25;
-    
     float swirl = (push.mid * 1.15 + vocalColorShift * 1.6 + push.treble * 0.55 + push.flux * 0.75) 
-                  * dynamicVolume * moodScale * (1.0 + bassDeviationFactor);
+                  * dynamicVolume * moodScale * (1.0 + push.bassDeviation * 1.25);
 
     float sideSign = (fract(float(id) * 0.543) > 0.5) ? 1.0 : -1.0;
-    float swirlBias = push.direction * 1.1;
     
     vel += dir * pulse;
-    vel += tangent * swirl * (sideSign + swirlBias);
+    vel += tangent * swirl * (sideSign + push.direction * 1.1);
 
     float driftAngle = random(float(id) * 7.123) * 6.28318 + (push.shortEnergy * 4.0);
-    vec2 fluidDrift = vec2(cos(driftAngle), sin(driftAngle)) * (0.28 * moodScale);
-    vel += fluidDrift;
+    vel += vec2(cos(driftAngle), sin(driftAngle)) * (0.28 * moodScale);
 
     float baseSafeRadius = 215.0;
     float bassBoost = pow(push.bass, 1.2) * 160.0;
     float onsetBoost = pow(push.onset, 1.1) * 95.0;
     float energySwelling = smoothstep(0.30, 0.80, push.shortEnergy) * 75.0;
     
-    float dynamicExpansion = (bassBoost + onsetBoost + energySwelling + vocalDynamics * 50.0) * moodScale;
-    float safeRadius = baseSafeRadius + dynamicExpansion;
+    float safeRadius = baseSafeRadius + (bassBoost + onsetBoost + energySwelling + vocalDynamics * 50.0) * moodScale;
 
     float nearRim = smoothstep(safeRadius * 0.58, safeRadius * 1.05, dist);
     float rimBurstRand = fract(sin(float(id) * 91.345 + push.rms * 123.4) * 47453.1);
-
     float beatImpact = max(max(push.onset * 1.28, push.bassEvent * 1.18), push.impact * 1.08);
     float rimBurstThreshold = mix(0.972, 0.930, smoothstep(0.22, 0.85, beatImpact));
 
     if (nearRim > 0.10 && rimBurstRand > rimBurstThreshold && beatImpact > 0.15) 
     {
         float popForce = (pow(beatImpact, 1.38) * 15.2 + push.bassDeviation * 5.5 + push.flux * 3.8) * moodScale;
-        float tangentScatter = (fract(float(id) * 0.345) - 0.5) * 1.9;
-        vel += (dir * popForce) + (tangent * tangentScatter * popForce * 0.42);
+        vel += (dir * popForce) + (tangent * (fract(float(id) * 0.345) - 0.5) * 1.9 * popForce * 0.42);
     }
 
     float isChorus = smoothstep(0.3, 0.65, push.longEnergy);
-    float explosionPower = (dropSignal * 0.10) + (burstFactor * 0.6);
-    float explosion = explosionPower * (2.2 + isChorus * 2.0) * moodScale;
-    vel += dir * explosion;
+    vel += dir * ((dropSignal * 0.10 + burstFactor * 0.6) * (2.2 + isChorus * 2.0) * moodScale);
 
     float radialSpeed = dot(vel, dir);
     vec2 radialVel = dir * radialSpeed;
 
-    float fluidPull = mix(0.0016, 0.0007, smoothstep(0.3, 0.65, push.longEnergy));
     float innerRadiusFactor = smoothstep(60.0, 160.0, dist);
-    vel -= fromCenter * (fluidPull * innerRadiusFactor);
+    vel -= fromCenter * (mix(0.0016, 0.0007, isChorus) * innerRadiusFactor);
 
     if (dist > safeRadius) 
     {
@@ -328,11 +294,9 @@ void main()
         vel -= dir * (excess * 0.022 * moodScale);
     }
 
-    float friction = mix(0.955, 0.92, burstFactor);
-    vel *= friction; 
+    vel *= mix(0.955, 0.92, burstFactor); 
 
     float speed = length(vel);
-    
     float dynamicLimit = mix(20.0, 36.0, (burstFactor * moodScale) + dynamicVolume * 0.25); 
     if (speed > dynamicLimit)
     {
@@ -373,7 +337,6 @@ void main()
 
         float denomForce = max(forceRadius * forceRadius * 0.4, 0.0001);
         float denomColor = max(forceRadius * forceRadius * 0.243, 0.0001);
-
         float particleWeight = clamp(25000.0 / float(max(PARTICLE_COUNT, 1u)), 0.02, 1.0);
 
         for (int gy = minGrid.y; gy <= maxGrid.y; ++gy)
@@ -385,13 +348,13 @@ void main()
 
                 if (dSeg < forceRadius)
                 {
-                    int cellIdx = gy * int(push.simWidth) + gx;
+                    ivec2 coord = ivec2(gx, gy);
 
                     float forceInf = exp(-(dSeg * dSeg) / denomForce);
                     vec2 pDeltaUV = pDelta / screenRes;
                     vec2 vFromParticle = pDeltaUV * push.splatForce * particleWeight;
 
-                    vec2 currentV = vec2(velocityCells[cellIdx].vx, velocityCells[cellIdx].vy);
+                    vec2 currentV = imageLoad(inOutVelocity, coord).xy;
                     vec2 addedV = vFromParticle * forceInf * speedFactor;
 
                     vec2 newV = currentV + addedV;
@@ -402,8 +365,7 @@ void main()
                         newV = (newV / curSpeed) * (MAX_FLUID_SPEED + (curSpeed - MAX_FLUID_SPEED) * 0.1);
                     }
 
-                    velocityCells[cellIdx].vx = newV.x;
-                    velocityCells[cellIdx].vy = newV.y;
+                    imageStore(inOutVelocity, coord, vec4(newV, 0.0, 0.0));
 
                     float colorRadius = forceRadius * 0.9;
                     if (dSeg < colorRadius)
@@ -411,10 +373,10 @@ void main()
                         float colorInf = exp(-(dSeg * dSeg) / denomColor);
                         float mixIntensity = clamp(colorInf * 0.32 * (0.35 + 0.65 * speedFactor) * (particleWeight * 1.9), 0.0, 0.65);
 
-                        colorCells[cellIdx].r = mix(colorCells[cellIdx].r, dyeColor.r, mixIntensity);
-                        colorCells[cellIdx].g = mix(colorCells[cellIdx].g, dyeColor.g, mixIntensity);
-                        colorCells[cellIdx].b = mix(colorCells[cellIdx].b, dyeColor.b, mixIntensity);
-                        colorCells[cellIdx].a = 1.0;
+                        vec4 currentC = imageLoad(inOutColor, coord);
+                        vec3 newC = mix(currentC.rgb, dyeColor, mixIntensity);
+
+                        imageStore(inOutColor, coord, vec4(newC, 1.0));
                     }
                 }
             }

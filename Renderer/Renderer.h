@@ -1,11 +1,12 @@
 #pragma once
 
-#include "VK/VulkanContext.h"
-#include "VK/VulkanSwapchain.h"
-#include "VK/VulkanFrameData.h"
-#include "VK/VulkanImageUtils.h"
-#include "VK/VulkanGraphicsPipeline.h"
-#include "VK/VulkanBuffer.h"
+#include "../VK/VulkanContext.h"
+#include "../VK/VulkanSwapchain.h"
+#include "../VK/VulkanFrameData.h"
+#include "../VK/VulkanImageUtils.h"
+#include "../VK/VulkanGraphicsPipeline.h"
+#include "../VK/VulkanBuffer.h"
+#include "../VK/VulkanTexture.h"
 #include "../Config/Config.h"
 #include <SFML/Window.hpp>
 
@@ -53,8 +54,8 @@ public:
         uint32_t particleCount
     );
 
-    void setFluidBuffer(
-        const VulkanBuffer& buffer,
+    void setFluidTexture(
+        const VulkanTexture &texture,
         uint32_t simWidth,
         uint32_t simHeight
     );
@@ -96,7 +97,8 @@ private:
     VkDescriptorSetLayout fluidDescriptorSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool fluidDescriptorPool = VK_NULL_HANDLE;
     std::vector<VkDescriptorSet> fluidDescriptorSet;
-    const VulkanBuffer* fluidBuffer = nullptr;
+    const VulkanTexture* fluidTexture = nullptr;
+    VkSampler fluidSampler = VK_NULL_HANDLE;   
     uint32_t fluidSimWidth = 0;
     uint32_t fluidSimHeight = 0;
     bool fluidConfigured = false;

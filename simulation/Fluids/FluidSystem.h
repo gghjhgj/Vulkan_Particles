@@ -3,7 +3,7 @@
 #include "FluidCell.h"
 #include "../RGBA.h"
 #include "../../Config/Config.h"
-#include "../../VK/VulkanBuffer.h"
+#include "../../VK/VulkanTexture.h"
 
 #include <vulkan/vulkan.h>
 #include <vector>
@@ -37,37 +37,28 @@ struct FluidPushConstants
 class FluidSystem
 {
 public:
-    std::vector<VelocityCell> velocityCells;
-    std::vector<ColorCell> colorCells;
-    std::vector<float> pressures;
-    std::vector<float> divergences;
-
     uint8_t getColorPingPong() const 
     { 
         return colorPingPong; 
     }
 
-    const VulkanBuffer& getActiveBuffer() const
+    const VulkanTexture& getActiveColorTexture() const 
     {
-        return (colorPingPong == 0) ? colorBufferA : colorBufferB;
+        return (colorPingPong == 0) ? colorTextureA : colorTextureB;
     }
 
-    const VulkanBuffer& getActiveColorBuffer() const 
+    const VulkanTexture& getActiveVelocityTexture() const 
     {
-        return (colorPingPong == 0) ? colorBufferA : colorBufferB;
+        return (velocityPingPong == 0) ? velocityTextureA : velocityTextureB; 
     }
 
-    const VulkanBuffer& getActiveVelocityBuffer() const 
-    {
-        return (velocityPingPong == 0) ? velocityBufferA : velocityBufferB; 
-    }
+    const VulkanTexture& getColorTextureA() const { return colorTextureA; }
+    const VulkanTexture& getColorTextureB() const { return colorTextureB; }
 
-    const VulkanBuffer& getVelocityBufferA() const { return velocityBufferA; }
-    const VulkanBuffer& getVelocityBufferB() const { return velocityBufferB; }
+    const VulkanTexture& getPressureTexture() const { return pressureTexture; }
 
-    const VulkanBuffer& getColorBufferA() const { return colorBufferA; }
-    const VulkanBuffer& getColorBufferB() const { return colorBufferB; }
-    const VulkanBuffer& getPressureBuffer() const { return pressureBuffer; }
+    const VulkanTexture& getVelocityTextureA() const { return velocityTextureA; }
+    const VulkanTexture& getVelocityTextureB() const { return velocityTextureB; }
 
     void init(
         VulkanContext &context,
@@ -111,15 +102,16 @@ private:
     uint32_t width{0};
     uint32_t height{0};
 
-    VulkanBuffer velocityBufferA;
-    VulkanBuffer velocityBufferB;
+    VulkanTexture velocityTextureA;
+    VulkanTexture velocityTextureB;
 
-    VulkanBuffer colorBufferA;
-    VulkanBuffer colorBufferB;
+    VulkanTexture colorTextureA;
+    VulkanTexture colorTextureB;
 
-    VulkanBuffer pressureBuffer;
+    VulkanTexture pressureTexture;
+    VulkanTexture divergenceTexture;
 
-    VulkanBuffer divergenceBuffer;
+    VkSampler linearSampler{VK_NULL_HANDLE};
 
     uint8_t colorPingPong = 0;
     uint8_t velocityPingPong = 0;

@@ -1,9 +1,9 @@
 #version 450
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(std430, binding = 0) readonly buffer  PressIn { float inPressure[]; };
-layout(std430, binding = 1) readonly buffer  VelIn   { vec2 inVelocity[]; };
-layout(std430, binding = 2) writeonly buffer VelOut  { vec2 outVelocity[]; };
+layout(r32f, binding = 0) readonly uniform image2D inPressure;
+layout(rg32f, binding = 1) readonly uniform image2D inVelocity;
+layout(rg32f, binding = 2) writeonly uniform image2D outVelocity;
 
 layout(push_constant) uniform Push
 {
@@ -21,14 +21,14 @@ layout(push_constant) uniform Push
     uint simHeight;         
     uint windowWidth;       
     uint windowHeight;      
-    uint isMouseDown;       
+    uint isMouseDown;
+    uint phase;
 } push;
 
-float getP(int x, int y)
+float getP(ivec2 p)
 {
-    x = clamp(x, 0, int(push.simWidth - 1));
-    y = clamp(y, 0, int(push.simHeight - 1));
-    return inPressure[y * int(push.simWidth) + x]; 
+    p = clamp(p, ivec2(0), ivec2(int(push.simWidth - 1), int(push.simHeight - 1)));
+    return imageLoad(inPressure, p).r;
 }
 
 void main()
@@ -36,19 +36,15 @@ void main()
     ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
     if (pos.x >= int(push.simWidth) || pos.y >= int(push.simHeight)) return;
 
-    int x = pos.x;
-    int y = pos.y;
-    uint id = uint(y) * push.simWidth + uint(x);
+    float pL = getP(pos + ivec2(-1, 0));
+    float pR = getP(pos + ivec2(1, 0));
+    float pB = getP(pos + ivec2(0, -1));
+    float pT = getP(pos + ivec2(0, 1));
 
-    float pL = getP(x - 1, y);
-    float pR = getP(x + 1, y);
-    float pB = getP(x, y - 1);
-    float pT = getP(x, y + 1);
+    vec2 gradP = vec2(pR - pL, pT - pB) * 0.5;
 
-    vec2 vel = inVelocity[id];
+    vec2 currentV = imageLoad(inVelocity, pos).xy;
+    vec2 newV = currentV - gradP;
 
-    vel.x -= 0.5 * (pR - pL);
-    vel.y -= 0.5 * (pT - pB);
-
-    outVelocity[id] = vel;
+    imageStore(outVelocity, pos, vec4(newV, 0.0, 0.0));
 }

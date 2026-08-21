@@ -1,5 +1,6 @@
 #include "Renderer.h"
 #include "ImGuiManager.h"
+#include "../VK/VulkanTexture.h"
 
 #include <stdexcept>
 #include <iostream>
@@ -82,6 +83,9 @@ void Renderer::init(
             throw std::runtime_error("Failed to create render finished semaphore.");
         }
     }
+
+    // Tworzenie samplera do wyświetlania płynu na ekranie
+    fluidSampler = VulkanTexture::createLinearClampSampler(vkContext->device);
 
     createParticlePipeline();
     createParticleDescriptors();
@@ -251,11 +255,14 @@ void Renderer::setParticleBuffer(
     }
 }
 
+// -------------------------------------------------------------
+// FLUID PIPELINE (ZMIANA NA COMBINED_IMAGE_SAMPLER)
+// -------------------------------------------------------------
 void Renderer::createFluidPipeline()
 {
     VkDescriptorSetLayoutBinding binding{};
     binding.binding = 0;
-    binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; // <--- Tekstura 2D
     binding.descriptorCount = 1;
     binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
@@ -289,7 +296,7 @@ void Renderer::createFluidPipeline()
 void Renderer::createFluidDescriptors()
 {
     VkDescriptorPoolSize poolSize{};
-    poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; // <--- Sampler w poolu
     poolSize.descriptorCount = MAX_FRAMES_IN_FLIGHT;
 
     VkDescriptorPoolCreateInfo poolInfo{};
@@ -325,7 +332,7 @@ void Renderer::createFluidDescriptors()
         throw std::runtime_error("Failed to allocate fluid descriptor set.");
     }
 
-    if (fluidBuffer != nullptr)
+    if (fluidTexture != nullptr)
     {
         updateFluidDescriptors();
     }
@@ -333,24 +340,24 @@ void Renderer::createFluidDescriptors()
 
 void Renderer::updateFluidDescriptors()
 {
-    if (!fluidBuffer || fluidDescriptorSet.empty())
+    if (!fluidTexture || fluidDescriptorSet.empty())
         return;
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
     {
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = fluidBuffer->handle;
-        bufferInfo.offset = 0;
-        bufferInfo.range = fluidBuffer->size;
+        VkDescriptorImageInfo imageInfo{};
+        imageInfo.sampler = fluidSampler;
+        imageInfo.imageView = fluidTexture->view;
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
         VkWriteDescriptorSet write{};
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write.dstSet = fluidDescriptorSet[i];
         write.dstBinding = 0;
         write.dstArrayElement = 0;
-        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         write.descriptorCount = 1;
-        write.pBufferInfo = &bufferInfo;
+        write.pImageInfo = &imageInfo;
 
         vkUpdateDescriptorSets(
             vkContext->device,
@@ -361,8 +368,8 @@ void Renderer::updateFluidDescriptors()
     }
 }
 
-void Renderer::setFluidBuffer(
-    const VulkanBuffer &buffer,
+void Renderer::setFluidTexture(
+    const VulkanTexture &texture,
     uint32_t simWidth,
     uint32_t simHeight)
 {
@@ -371,7 +378,7 @@ void Renderer::setFluidBuffer(
         vkDeviceWaitIdle(vkContext->device);
     }
     
-    fluidBuffer = &buffer;
+    fluidTexture = &texture;
     fluidSimWidth = simWidth;
     fluidSimHeight = simHeight;
     fluidConfigured = true;
@@ -436,68 +443,50 @@ void Renderer::render(ImGuiManager &imgui)
         throw std::runtime_error("Failed to begin command buffer.");
     }
 
+    // Synchronizacja z compute shaderem
     if (computeFinishedSemaphore != VK_NULL_HANDLE)
     {
-        VkBuffer syncBufferHandle = VK_NULL_HANDLE;
-        VkDeviceSize syncBufferSize = 0;
-
         if (particleBuffer != nullptr)
-        {
-            syncBufferHandle = particleBuffer->handle;
-            syncBufferSize = particleBuffer->size;
-        }
-        else if (fluidBuffer != nullptr)
-        {
-            syncBufferHandle = fluidBuffer->handle;
-            syncBufferSize = fluidBuffer->size;
-        }
-
-        if (syncBufferHandle != VK_NULL_HANDLE)
         {
             VkBufferMemoryBarrier bufferBarrier{};
             bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            bufferBarrier.buffer = syncBufferHandle;
+            bufferBarrier.buffer = particleBuffer->handle;
             bufferBarrier.offset = 0;
-            bufferBarrier.size = syncBufferSize;
+            bufferBarrier.size = particleBuffer->size;
+            bufferBarrier.srcAccessMask = (vkContext->computeQueueFamilyIndex != vkContext->graphicsQueueFamilyIndex) ? 0 : VK_ACCESS_SHADER_WRITE_BIT;
+            bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            bufferBarrier.srcQueueFamilyIndex = (vkContext->computeQueueFamilyIndex != vkContext->graphicsQueueFamilyIndex) ? vkContext->computeQueueFamilyIndex : VK_QUEUE_FAMILY_IGNORED;
+            bufferBarrier.dstQueueFamilyIndex = (vkContext->computeQueueFamilyIndex != vkContext->graphicsQueueFamilyIndex) ? vkContext->graphicsQueueFamilyIndex : VK_QUEUE_FAMILY_IGNORED;
 
-            if (vkContext->computeQueueFamilyIndex != vkContext->graphicsQueueFamilyIndex)
-            {
-                bufferBarrier.srcAccessMask = 0;
-                bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-                bufferBarrier.srcQueueFamilyIndex = vkContext->computeQueueFamilyIndex;
-                bufferBarrier.dstQueueFamilyIndex = vkContext->graphicsQueueFamilyIndex;
+            vkCmdPipelineBarrier(
+                commandBuffer,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0, 0, nullptr, 1, &bufferBarrier, 0, nullptr);
+        }
+        else if (fluidTexture != nullptr)
+        {
+            // BARIERA OBRAZU (Dla tekstury płynu)
+            VkImageMemoryBarrier imageBarrier{};
+            imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            imageBarrier.image = fluidTexture->image;
+            imageBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+            imageBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            imageBarrier.srcAccessMask = (vkContext->computeQueueFamilyIndex != vkContext->graphicsQueueFamilyIndex) ? 0 : VK_ACCESS_SHADER_WRITE_BIT;
+            imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            imageBarrier.srcQueueFamilyIndex = (vkContext->computeQueueFamilyIndex != vkContext->graphicsQueueFamilyIndex) ? vkContext->computeQueueFamilyIndex : VK_QUEUE_FAMILY_IGNORED;
+            imageBarrier.dstQueueFamilyIndex = (vkContext->computeQueueFamilyIndex != vkContext->graphicsQueueFamilyIndex) ? vkContext->graphicsQueueFamilyIndex : VK_QUEUE_FAMILY_IGNORED;
+            imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imageBarrier.subresourceRange.baseMipLevel = 0;
+            imageBarrier.subresourceRange.levelCount = 1;
+            imageBarrier.subresourceRange.baseArrayLayer = 0;
+            imageBarrier.subresourceRange.layerCount = 1;
 
-                vkCmdPipelineBarrier(
-                    commandBuffer,
-                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                    0,
-                    0,
-                    nullptr,
-                    1,
-                    &bufferBarrier,
-                    0,
-                    nullptr);
-            }
-            else
-            {
-                bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-                bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-                bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-
-                vkCmdPipelineBarrier(
-                    commandBuffer,
-                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                    0,
-                    0,
-                    nullptr,
-                    1,
-                    &bufferBarrier,
-                    0,
-                    nullptr);
-            }
+            vkCmdPipelineBarrier(
+                commandBuffer,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &imageBarrier);
         }
     }
 
@@ -527,7 +516,7 @@ void Renderer::render(ImGuiManager &imgui)
 
     vkCmdBeginRendering(commandBuffer, &renderingInfo);
         
-    if (fluidConfigured && fluidBuffer != nullptr)
+    if (fluidConfigured && fluidTexture != nullptr)
     {
         vkCmdBindPipeline(
             commandBuffer,
@@ -727,6 +716,12 @@ void Renderer::destroy()
         fluidDescriptorPool = VK_NULL_HANDLE;
     }
 
+    if (fluidSampler != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(vkContext->device, fluidSampler, nullptr);
+        fluidSampler = VK_NULL_HANDLE;
+    }
+
     if (particleDescriptorSetLayout != VK_NULL_HANDLE)
     {
         vkDestroyDescriptorSetLayout(vkContext->device, particleDescriptorSetLayout, nullptr);
@@ -769,7 +764,7 @@ void Renderer::destroy()
     particlesConfigured = false;
     particleDescriptorSets.clear();
 
-    fluidBuffer = nullptr;
+    fluidTexture = nullptr;
     fluidSimWidth = 0;
     fluidSimHeight = 0;
     fluidConfigured = false;

@@ -1,11 +1,14 @@
 #version 450
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(std430, binding = 0) readonly buffer  VelIn  { vec2 inVelocity[]; };
-layout(std430, binding = 1) writeonly buffer VelOut { vec2 outVelocity[]; };
-layout(std430, binding = 2) readonly buffer  ColIn  { vec4 inColor[]; };
-layout(std430, binding = 3) writeonly buffer ColOut { vec4 outColor[]; };
-layout(std430, binding = 4) writeonly buffer DivOut { float outDivergence[]; };
+// Wejścia jako próbkowniki (Hardware Bilinear + Hardware Clamp)
+layout(binding = 0) uniform sampler2D inVelocity;
+layout(binding = 1) uniform sampler2D inColor;
+
+// Wyjścia jako Storage Images
+layout(rg32f, binding = 2) writeonly uniform image2D outVelocity;
+layout(rgba32f, binding = 3) writeonly uniform image2D outColor;
+layout(r32f, binding = 4) writeonly uniform image2D outDivergence;
 
 layout(push_constant) uniform Push
 {
@@ -25,51 +28,6 @@ layout(push_constant) uniform Push
     uint windowHeight;      
     uint isMouseDown;       
 } push;
-
-vec2 getVel(int x, int y)
-{
-    x = clamp(x, 0, int(push.simWidth - 1));
-    y = clamp(y, 0, int(push.simHeight - 1));
-    return inVelocity[y * int(push.simWidth) + x];
-}
-
-vec4 sampleColor(vec2 uv)
-{
-    vec2 pos = uv * vec2(float(push.simWidth), float(push.simHeight)) - 0.5;
-    
-    int maxW = int(push.simWidth) - 1;
-    int maxH = int(push.simHeight) - 1;
-    
-    ivec2 i0 = clamp(ivec2(floor(pos)), ivec2(0), ivec2(maxW, maxH));
-    ivec2 i1 = clamp(i0 + 1,            ivec2(0), ivec2(maxW, maxH));
-    vec2 f = fract(pos);
-
-    vec4 c00 = inColor[i0.y * int(push.simWidth) + i0.x];
-    vec4 c10 = inColor[i0.y * int(push.simWidth) + i1.x];
-    vec4 c01 = inColor[i1.y * int(push.simWidth) + i0.x];
-    vec4 c11 = inColor[i1.y * int(push.simWidth) + i1.x];
-
-    return mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y);
-}
-
-vec2 sampleVelocity(vec2 uv)
-{
-    vec2 pos = uv * vec2(float(push.simWidth), float(push.simHeight)) - 0.5;
-    
-    int maxW = int(push.simWidth) - 1;
-    int maxH = int(push.simHeight) - 1;
-    
-    ivec2 i0 = clamp(ivec2(floor(pos)), ivec2(0), ivec2(maxW, maxH));
-    ivec2 i1 = clamp(i0 + 1,            ivec2(0), ivec2(maxW, maxH));
-    vec2 f = fract(pos);
-
-    vec2 v00 = inVelocity[i0.y * int(push.simWidth) + i0.x];
-    vec2 v10 = inVelocity[i0.y * int(push.simWidth) + i1.x];
-    vec2 v01 = inVelocity[i1.y * int(push.simWidth) + i0.x];
-    vec2 v11 = inVelocity[i1.y * int(push.simWidth) + i1.x];
-
-    return mix(mix(v00, v10, f.x), mix(v01, v11, f.x), f.y);
-}
 
 vec3 getVelocityColor(vec2 dir)
 {
@@ -93,30 +51,37 @@ void main()
     ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
     if (pos.x >= int(push.simWidth) || pos.y >= int(push.simHeight)) return;
 
-    int x = pos.x;
-    int y = pos.y;
-    uint id = uint(y) * push.simWidth + uint(x);
-
     vec2 simSize = vec2(float(push.simWidth), float(push.simHeight));
-    vec2 uv = (vec2(float(x), float(y)) + 0.5) / simSize;
+    vec2 uv = (vec2(pos) + 0.5) / simSize;
+    vec2 invSim = 1.0 / simSize;
 
-    vec2 currentV = inVelocity[id];
     float dt = (push.dt > 0.0 && push.dt < 0.1) ? push.dt : 0.016;
 
-    vec2 traceUV = uv - (currentV * dt) / simSize;
-    vec2 advV = sampleVelocity(traceUV);
-    vec4 advC = sampleColor(traceUV);
+    // Sprzętowy odczyt bezpośrednio ze współrzędnych całkowitych (texelFetch)
+    vec2 currentV = texelFetch(inVelocity, pos, 0).xy;
 
-    vec2 vL = getVel(x - 1, y);
-    vec2 vR = getVel(x + 1, y);
-    vec2 vB = getVel(x, y - 1);
-    vec2 vT = getVel(x, y + 1);
+    // SPRZĘTOWE PRÓBKOWANIE DWULINIOWE W JEDNEJ LINICZCE!
+    vec2 traceUV = uv - (currentV * dt) * invSim;
+    vec2 advV = texture(inVelocity, traceUV).xy;
+    vec4 advC = texture(inColor, traceUV);
+
+    // Vorticity (odczyt sąsiadów przez texelFetch ze sprzętowym cachem 2D)
+    vec2 vL = texelFetch(inVelocity, clamp(pos + ivec2(-1, 0), ivec2(0), ivec2(pos.x, int(push.simHeight)-1)), 0).xy;
+    vec2 vR = texelFetch(inVelocity, clamp(pos + ivec2(1, 0), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
+    vec2 vB = texelFetch(inVelocity, clamp(pos + ivec2(0, -1), ivec2(0), ivec2(int(push.simWidth)-1, pos.y)), 0).xy;
+    vec2 vT = texelFetch(inVelocity, clamp(pos + ivec2(0, 1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
 
     float curlCenter = (vR.y - vL.y) - (vT.x - vB.x);
-    float curlL = abs((getVel(x, y).y - getVel(x - 2, y).y) - (getVel(x - 1, y + 1).x - getVel(x - 1, y - 1).x));
-    float curlR = abs((getVel(x + 2, y).y - getVel(x, y).y) - (getVel(x + 1, y + 1).x - getVel(x + 1, y - 1).x));
-    float curlB = abs((getVel(x + 1, y - 1).y - getVel(x - 1, y - 1).y) - (getVel(x, y).x - getVel(x, y - 2).x));
-    float curlT = abs((getVel(x + 1, y + 1).y - getVel(x - 1, y + 1).y) - (getVel(x, y + 2).x - getVel(x, y).x));
+
+    vec2 vLL = texelFetch(inVelocity, clamp(pos + ivec2(-2, 0), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
+    vec2 vRR = texelFetch(inVelocity, clamp(pos + ivec2(2, 0), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
+    vec2 vBB = texelFetch(inVelocity, clamp(pos + ivec2(0, -2), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
+    vec2 vTT = texelFetch(inVelocity, clamp(pos + ivec2(0, 2), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
+
+    float curlL = abs((currentV.y - vLL.y) - (texelFetch(inVelocity, clamp(pos + ivec2(-1, 1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).x - texelFetch(inVelocity, clamp(pos + ivec2(-1, -1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).x));
+    float curlR = abs((vRR.y - currentV.y) - (texelFetch(inVelocity, clamp(pos + ivec2(1, 1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).x - texelFetch(inVelocity, clamp(pos + ivec2(1, -1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).x));
+    float curlB = abs((texelFetch(inVelocity, clamp(pos + ivec2(1, -1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).y - texelFetch(inVelocity, clamp(pos + ivec2(-1, -1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).y) - (currentV.x - vBB.x));
+    float curlT = abs((texelFetch(inVelocity, clamp(pos + ivec2(1, 1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).y - texelFetch(inVelocity, clamp(pos + ivec2(-1, 1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).y) - (vTT.x - currentV.x));
 
     vec2 grad = vec2(curlR - curlL, curlT - curlB) * 0.5;
     float gradLen = length(grad);
@@ -164,9 +129,10 @@ void main()
 
     advV = clamp(advV, vec2(-100.0), vec2(100.0));
     
-    outVelocity[id] = advV * push.velocityDissipation;
-    outColor[id] = advC * push.densityDissipation;
+    // Zapis do Storage Images
+    imageStore(outVelocity, pos, vec4(advV * push.velocityDissipation, 0.0, 0.0));
+    imageStore(outColor, pos, advC * push.densityDissipation);
 
     float div = 0.5 * ((vR.x - vL.x) + (vT.y - vB.y));
-    outDivergence[id] = clamp(div, -30.0, 30.0);
+    imageStore(outDivergence, pos, vec4(clamp(div, -30.0, 30.0), 0.0, 0.0, 0.0));
 }

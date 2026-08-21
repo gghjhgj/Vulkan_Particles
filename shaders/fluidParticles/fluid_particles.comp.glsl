@@ -16,34 +16,15 @@ struct Particle
     uint color;
 };
 
-struct VelocityCell
-{
-    float vx;
-    float vy;
-};
-
-struct ColorCell
-{
-    float r;
-    float g;
-    float b;
-    float a;
-};
-
+// Binding 0: Cząsteczki (SSBO)
 layout(std430, set = 0, binding = 0) buffer ParticleBuffer
 {
     Particle particles[];
 };
 
-layout(std430, set = 0, binding = 1) buffer VelocityBuffer
-{
-    VelocityCell velocityCells[];
-};
-
-layout(std430, set = 0, binding = 2) buffer ColorBuffer
-{
-    ColorCell colorCells[];
-};
+// Binding 1 i 2: Tekstury 2D Płynu (Storage Images Read/Write)
+layout(rg32f, set = 0, binding = 1) uniform image2D inOutVelocity;
+layout(rgba32f, set = 0, binding = 2) uniform image2D inOutColor;
 
 layout(push_constant) uniform Push
 {
@@ -64,14 +45,6 @@ layout(push_constant) uniform Push
     uint isMouseDown;
 } push;
 
-vec2 getVelocityCell(int x, int y)
-{
-    int clampedX = clamp(x, 0, int(push.simWidth) - 1);
-    int clampedY = clamp(y, 0, int(push.simHeight) - 1);
-    int idx = clampedY * int(push.simWidth) + clampedX;
-    return vec2(velocityCells[idx].vx, velocityCells[idx].vy);
-}
-
 vec2 sampleFluidVelocity(vec2 uv)
 {
     vec2 pos = uv * vec2(float(push.simWidth), float(push.simHeight)) - 0.5;
@@ -83,10 +56,10 @@ vec2 sampleFluidVelocity(vec2 uv)
     ivec2 i1 = clamp(i0 + 1,            ivec2(0), ivec2(maxW, maxH));
     vec2 f = fract(pos);
 
-    vec2 v00 = getVelocityCell(i0.x, i0.y);
-    vec2 v10 = getVelocityCell(i1.x, i0.y);
-    vec2 v01 = getVelocityCell(i0.x, i1.y);
-    vec2 v11 = getVelocityCell(i1.x, i1.y);
+    vec2 v00 = imageLoad(inOutVelocity, ivec2(i0.x, i0.y)).xy;
+    vec2 v10 = imageLoad(inOutVelocity, ivec2(i1.x, i0.y)).xy;
+    vec2 v01 = imageLoad(inOutVelocity, ivec2(i0.x, i1.y)).xy;
+    vec2 v11 = imageLoad(inOutVelocity, ivec2(i1.x, i1.y)).xy;
 
     return mix(mix(v00, v10, f.x), mix(v01, v11, f.x), f.y);
 }
@@ -138,7 +111,7 @@ void main()
     vec2 uv = pos / screenRes;
     vec2 fluidVel = sampleFluidVelocity(uv);
 
-    vec2 fluidVelPixels = fluidVel * (screenRes.x / simRes.x) * 15;
+    vec2 fluidVelPixels = fluidVel * (screenRes.x / simRes.x) * 15.0;
     
     vel = mix(vel, fluidVelPixels, clamp(6.0 * dt, 0.0, 1.0));
 
@@ -155,18 +128,14 @@ void main()
         if (dist > 0.001 && dist < RADIUS)
         {
             float orbitRadius = clamp(dist, MIN_RADIUS, RADIUS);
-
             float angle = atan(delta.y, delta.x);
 
             float t = 1.0 - dist / RADIUS;
             float influence = t * t;
-
             float angularSpeed = mix(8.0, 30.0, influence);
-
             float nextAngle = angle + angularSpeed * dt;
 
             vec2 targetPos = mousePos + vec2(cos(nextAngle), sin(nextAngle)) * orbitRadius;
-
             vel = (targetPos - pos) / max(dt, 0.0001);
         }
     }
@@ -207,7 +176,6 @@ void main()
 
         float denomForce = max(forceRadius * forceRadius * 0.4, 0.0001);
         float denomColor = max(forceRadius * forceRadius * 0.243, 0.0001);
-
         float particleWeight = clamp(25000.0 / float(max(PARTICLE_COUNT, 1u)), 0.02, 1.0);
 
         for (int gy = minGrid.y; gy <= maxGrid.y; ++gy)
@@ -215,31 +183,29 @@ void main()
             for (int gx = minGrid.x; gx <= maxGrid.x; ++gx)
             {
                 vec2 cellPixelPos = ((vec2(gx, gy) + 0.5) / simRes) * screenRes;
-                
                 float dist = distToSegment(cellPixelPos, prevPos, pos);
 
                 if (dist < forceRadius)
                 {
-                    int cellIdx = gy * int(push.simWidth) + gx;
+                    ivec2 coord = ivec2(gx, gy);
 
                     float forceInf = exp(-(dist * dist) / denomForce);
-                    
                     vec2 pDeltaUV = pDelta / screenRes;
                     vec2 vFromParticle = pDeltaUV * push.splatForce * particleWeight;
 
-                    vec2 currentV = vec2(velocityCells[cellIdx].vx, velocityCells[cellIdx].vy);
+                    vec2 currentV = imageLoad(inOutVelocity, coord).xy;
                     vec2 addedV = vFromParticle * forceInf * speedFactor;
 
                     vec2 newV = currentV + addedV;
-                    float speed = length(newV);
+                    float curSpeed = length(newV);
                     
                     const float MAX_FLUID_SPEED = 120.0;
-                    if (speed > MAX_FLUID_SPEED) {
-                        newV = (newV / speed) * (MAX_FLUID_SPEED + (speed - MAX_FLUID_SPEED) * 0.1);
+                    if (curSpeed > MAX_FLUID_SPEED) {
+                        newV = (newV / curSpeed) * (MAX_FLUID_SPEED + (curSpeed - MAX_FLUID_SPEED) * 0.1);
                     }
 
-                    velocityCells[cellIdx].vx = newV.x;
-                    velocityCells[cellIdx].vy = newV.y;
+                    // Zapis prędkości bezpośrednio do tekstury 2D
+                    imageStore(inOutVelocity, coord, vec4(newV, 0.0, 0.0));
 
                     float colorRadius = forceRadius * 0.9;
                     if (dist < colorRadius)
@@ -247,10 +213,11 @@ void main()
                         float colorInf = exp(-(dist * dist) / denomColor);
                         float mixIntensity = clamp(colorInf * 0.65 * (0.1 + 0.9 * speedFactor) * (particleWeight * 2.5), 0.0, 1.0);
 
-                        colorCells[cellIdx].r = mix(colorCells[cellIdx].r, dyeColor.r, mixIntensity);
-                        colorCells[cellIdx].g = mix(colorCells[cellIdx].g, dyeColor.g, mixIntensity);
-                        colorCells[cellIdx].b = mix(colorCells[cellIdx].b, dyeColor.b, mixIntensity);
-                        colorCells[cellIdx].a = 1.0;
+                        vec4 currentC = imageLoad(inOutColor, coord);
+                        vec3 newC = mix(currentC.rgb, dyeColor, mixIntensity);
+
+                        // Zapis koloru bezpośrednio do tekstury 2D
+                        imageStore(inOutColor, coord, vec4(newC, 1.0));
                     }
                 }
             }

@@ -59,43 +59,57 @@ void FluidSystem::init(
     this->width = width;
     this->height = height;
 
-    const uint32_t totalCells = width * height;
+    velocityTextureA.init(context, width, height, VK_FORMAT_R32G32_SFLOAT);
+    velocityTextureB.init(context, width, height, VK_FORMAT_R32G32_SFLOAT);
 
-    velocityCells.resize(totalCells, {0.0f, 0.0f});
-    colorCells.resize(totalCells, {0.0f, 0.0f, 0.0f, 0.0f});
-    pressures.resize(totalCells, 0.0f);
-    divergences.resize(totalCells, 0.0f);
+    colorTextureA.init(context, width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
+    colorTextureB.init(context, width, height, VK_FORMAT_R32G32B32A32_SFLOAT);
 
-    const VkDeviceSize velocityBufferSize = totalCells * sizeof(VelocityCell);
-    const VkDeviceSize colorBufferSize = totalCells * sizeof(ColorCell);
-    const VkDeviceSize scalarBufferSize = totalCells * sizeof(float);
+    pressureTexture.init(context, width, height, VK_FORMAT_R32_SFLOAT);
+    divergenceTexture.init(context, width, height, VK_FORMAT_R32_SFLOAT);
 
-    velocityBufferA.initStorage(context, velocityBufferSize, true);
-    velocityBufferA.upload(velocityCells.data(), velocityBufferSize);
+    linearSampler = VulkanTexture::createLinearClampSampler(context.device);
 
-    velocityBufferB.initStorage(context, velocityBufferSize, true);
-    velocityBufferB.upload(velocityCells.data(), velocityBufferSize);
+    VkCommandPoolCreateInfo cmdPoolInfo{};
+    cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    cmdPoolInfo.queueFamilyIndex = context.computeQueueFamilyIndex;
+    vkCreateCommandPool(context.device, &cmdPoolInfo, nullptr, &commandPool);
 
-    colorBufferA.initStorage(context, colorBufferSize, true);
-    colorBufferA.upload(colorCells.data(), colorBufferSize);
+    VkCommandBufferAllocateInfo cmdAllocInfo{};
+    cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmdAllocInfo.commandPool = commandPool;
+    cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmdAllocInfo.commandBufferCount = 1;
+    vkAllocateCommandBuffers(context.device, &cmdAllocInfo, &commandBuffer);
 
-    colorBufferB.initStorage(context, colorBufferSize, true);
-    colorBufferB.upload(colorCells.data(), colorBufferSize);
+    VkCommandBufferBeginInfo initCmdBegin{};
+    initCmdBegin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    initCmdBegin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(commandBuffer, &initCmdBegin);
 
-    pressureBuffer.initStorage(context, scalarBufferSize, true);
-    pressureBuffer.upload(pressures.data(), scalarBufferSize);
+    velocityTextureA.transitionLayout(commandBuffer, VK_IMAGE_LAYOUT_GENERAL);
+    velocityTextureB.transitionLayout(commandBuffer, VK_IMAGE_LAYOUT_GENERAL);
+    colorTextureA.transitionLayout(commandBuffer, VK_IMAGE_LAYOUT_GENERAL);
+    colorTextureB.transitionLayout(commandBuffer, VK_IMAGE_LAYOUT_GENERAL);
+    pressureTexture.transitionLayout(commandBuffer, VK_IMAGE_LAYOUT_GENERAL);
+    divergenceTexture.transitionLayout(commandBuffer, VK_IMAGE_LAYOUT_GENERAL);
 
-    divergenceBuffer.initStorage(context, scalarBufferSize, true);
-    divergenceBuffer.upload(divergences.data(), scalarBufferSize);
+    vkEndCommandBuffer(commandBuffer);
+
+    VkSubmitInfo initSubmit{};
+    initSubmit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    initSubmit.commandBufferCount = 1;
+    initSubmit.pCommandBuffers = &commandBuffer;
+    vkQueueSubmit(context.computeQueue, 1, &initSubmit, VK_NULL_HANDLE);
+    vkQueueWaitIdle(context.computeQueue);
 
     VkDescriptorSetLayoutBinding advectBindings[5]{};
-    for (uint32_t i = 0; i < 5; ++i)
-    {
-        advectBindings[i].binding = i;
-        advectBindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        advectBindings[i].descriptorCount = 1;
-        advectBindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-    }
+    advectBindings[0] = {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    advectBindings[1] = {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    advectBindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    advectBindings[3] = {3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    advectBindings[4] = {4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
 
     VkDescriptorSetLayoutCreateInfo advectLayoutInfo{};
     advectLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -104,13 +118,8 @@ void FluidSystem::init(
     vkCreateDescriptorSetLayout(context.device, &advectLayoutInfo, nullptr, &advectDescriptorSetLayout);
 
     VkDescriptorSetLayoutBinding jacobiBindings[2]{};
-    for (uint32_t i = 0; i < 2; ++i)
-    {
-        jacobiBindings[i].binding = i;
-        jacobiBindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        jacobiBindings[i].descriptorCount = 1;
-        jacobiBindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-    }
+    jacobiBindings[0] = {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    jacobiBindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
 
     VkDescriptorSetLayoutCreateInfo jacobiLayoutInfo{};
     jacobiLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -119,13 +128,9 @@ void FluidSystem::init(
     vkCreateDescriptorSetLayout(context.device, &jacobiLayoutInfo, nullptr, &jacobiDescriptorSetLayout);
 
     VkDescriptorSetLayoutBinding projectBindings[3]{};
-    for (uint32_t i = 0; i < 3; ++i)
-    {
-        projectBindings[i].binding = i;
-        projectBindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        projectBindings[i].descriptorCount = 1;
-        projectBindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-    }
+    projectBindings[0] = {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    projectBindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    projectBindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
 
     VkDescriptorSetLayoutCreateInfo projectLayoutInfo{};
     projectLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -165,14 +170,16 @@ void FluidSystem::init(
     vkDestroyShaderModule(context.device, modJacobi, nullptr);
     vkDestroyShaderModule(context.device, modProject, nullptr);
 
-    VkDescriptorPoolSize poolSize{};
-    poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    poolSize.descriptorCount = 15; 
+    VkDescriptorPoolSize poolSizes[2]{};
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSizes[0].descriptorCount = 4;
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    poolSizes[1].descriptorCount = 11;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.poolSizeCount = 2;
+    poolInfo.pPoolSizes = poolSizes;
     poolInfo.maxSets = 4;
 
     vkCreateDescriptorPool(context.device, &poolInfo, nullptr, &descriptorPool);
@@ -198,63 +205,40 @@ void FluidSystem::init(
     jacobiDescriptorSet     = allSets[2];
     projectDescriptorSet    = allSets[3];
 
-    VkDescriptorBufferInfo velocityAInfo{velocityBufferA.handle, 0, velocityBufferA.size};
-    VkDescriptorBufferInfo velocityBInfo{velocityBufferB.handle, 0, velocityBufferB.size};
-    VkDescriptorBufferInfo colorAInfo{colorBufferA.handle, 0, colorBufferA.size};
-    VkDescriptorBufferInfo colorBInfo{colorBufferB.handle, 0, colorBufferB.size};
-    VkDescriptorBufferInfo pressureInfo{pressureBuffer.handle, 0, pressureBuffer.size};
-    VkDescriptorBufferInfo divergenceInfo{divergenceBuffer.handle, 0, divergenceBuffer.size};
+    VkDescriptorImageInfo velA_SamplerInfo{linearSampler, velocityTextureA.view, VK_IMAGE_LAYOUT_GENERAL};
+    VkDescriptorImageInfo velA_StorageInfo{VK_NULL_HANDLE, velocityTextureA.view, VK_IMAGE_LAYOUT_GENERAL};
+    VkDescriptorImageInfo velB_StorageInfo{VK_NULL_HANDLE, velocityTextureB.view, VK_IMAGE_LAYOUT_GENERAL};
+
+    VkDescriptorImageInfo colA_SamplerInfo{linearSampler, colorTextureA.view, VK_IMAGE_LAYOUT_GENERAL};
+    VkDescriptorImageInfo colB_SamplerInfo{linearSampler, colorTextureB.view, VK_IMAGE_LAYOUT_GENERAL};
+    VkDescriptorImageInfo colA_StorageInfo{VK_NULL_HANDLE, colorTextureA.view, VK_IMAGE_LAYOUT_GENERAL};
+    VkDescriptorImageInfo colB_StorageInfo{VK_NULL_HANDLE, colorTextureB.view, VK_IMAGE_LAYOUT_GENERAL};
+
+    VkDescriptorImageInfo press_StorageInfo{VK_NULL_HANDLE, pressureTexture.view, VK_IMAGE_LAYOUT_GENERAL};
+    VkDescriptorImageInfo div_StorageInfo{VK_NULL_HANDLE, divergenceTexture.view, VK_IMAGE_LAYOUT_GENERAL};
 
     VkWriteDescriptorSet advectWrites0[5]{};
-    for (uint32_t i = 0; i < 5; ++i) {
-        advectWrites0[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        advectWrites0[i].dstSet = advectDescriptorSets[0];
-        advectWrites0[i].dstBinding = i;
-        advectWrites0[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        advectWrites0[i].descriptorCount = 1;
-    }
-    advectWrites0[0].pBufferInfo = &velocityAInfo;
-    advectWrites0[1].pBufferInfo = &velocityBInfo;
-    advectWrites0[2].pBufferInfo = &colorAInfo;
-    advectWrites0[3].pBufferInfo = &colorBInfo;
-    advectWrites0[4].pBufferInfo = &divergenceInfo;
+    advectWrites0[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 0, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &velA_SamplerInfo, nullptr, nullptr};
+    advectWrites0[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 1, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &colA_SamplerInfo, nullptr, nullptr};
+    advectWrites0[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &velB_StorageInfo, nullptr, nullptr};
+    advectWrites0[3] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 3, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &colB_StorageInfo, nullptr, nullptr};
+    advectWrites0[4] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 4, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &div_StorageInfo,  nullptr, nullptr};
 
     VkWriteDescriptorSet advectWrites1[5]{};
-    for (uint32_t i = 0; i < 5; ++i) {
-        advectWrites1[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        advectWrites1[i].dstSet = advectDescriptorSets[1];
-        advectWrites1[i].dstBinding = i;
-        advectWrites1[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        advectWrites1[i].descriptorCount = 1;
-    }
-    advectWrites1[0].pBufferInfo = &velocityAInfo;
-    advectWrites1[1].pBufferInfo = &velocityBInfo;
-    advectWrites1[2].pBufferInfo = &colorBInfo;
-    advectWrites1[3].pBufferInfo = &colorAInfo;
-    advectWrites1[4].pBufferInfo = &divergenceInfo;
+    advectWrites1[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 0, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &velA_SamplerInfo, nullptr, nullptr};
+    advectWrites1[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 1, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &colB_SamplerInfo, nullptr, nullptr};
+    advectWrites1[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &velB_StorageInfo, nullptr, nullptr};
+    advectWrites1[3] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 3, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &colA_StorageInfo, nullptr, nullptr};
+    advectWrites1[4] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 4, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &div_StorageInfo,  nullptr, nullptr};
 
     VkWriteDescriptorSet jacobiWrites[2]{};
-    for (uint32_t i = 0; i < 2; ++i) {
-        jacobiWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        jacobiWrites[i].dstSet = jacobiDescriptorSet;
-        jacobiWrites[i].dstBinding = i;
-        jacobiWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        jacobiWrites[i].descriptorCount = 1;
-    }
-    jacobiWrites[0].pBufferInfo = &pressureInfo;
-    jacobiWrites[1].pBufferInfo = &divergenceInfo;
+    jacobiWrites[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, jacobiDescriptorSet, 0, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &press_StorageInfo, nullptr, nullptr};
+    jacobiWrites[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, jacobiDescriptorSet, 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &div_StorageInfo,   nullptr, nullptr};
 
     VkWriteDescriptorSet projectWrites[3]{};
-    for (uint32_t i = 0; i < 3; ++i) {
-        projectWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        projectWrites[i].dstSet = projectDescriptorSet;
-        projectWrites[i].dstBinding = i;
-        projectWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        projectWrites[i].descriptorCount = 1;
-    }
-    projectWrites[0].pBufferInfo = &pressureInfo;
-    projectWrites[1].pBufferInfo = &velocityBInfo;
-    projectWrites[2].pBufferInfo = &velocityAInfo;
+    projectWrites[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 0, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &press_StorageInfo, nullptr, nullptr};
+    projectWrites[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &velB_StorageInfo,  nullptr, nullptr};
+    projectWrites[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &velA_StorageInfo,  nullptr, nullptr};
 
     VkWriteDescriptorSet allWrites[15]{};
     uint32_t writeIndex = 0;
@@ -264,19 +248,6 @@ void FluidSystem::init(
     for (auto& write : projectWrites) allWrites[writeIndex++] = write;
 
     vkUpdateDescriptorSets(context.device, writeIndex, allWrites, 0, nullptr);
-
-    VkCommandPoolCreateInfo cmdPoolInfo{};
-    cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    cmdPoolInfo.queueFamilyIndex = context.computeQueueFamilyIndex;
-    vkCreateCommandPool(context.device, &cmdPoolInfo, nullptr, &commandPool);
-
-    VkCommandBufferAllocateInfo cmdAllocInfo{};
-    cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmdAllocInfo.commandPool = commandPool;
-    cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    cmdAllocInfo.commandBufferCount = 1;
-    vkAllocateCommandBuffers(context.device, &cmdAllocInfo, &commandBuffer);
 
     VkFenceCreateInfo fenceInfo{};
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -296,7 +267,6 @@ void FluidSystem::update(
 {
     const uint32_t groupX = (width + 15) / 16;
     const uint32_t groupY = (height + 15) / 16;
-
     const uint32_t rbGroupX = ((width / 2) + 15) / 16;
 
     vkWaitForFences(context.device, 1, &computeFence, VK_TRUE, UINT64_MAX);
@@ -386,30 +356,36 @@ void FluidSystem::update(
 
     vkCmdDispatch(commandBuffer, groupX, groupY, 1);
 
-    VkBuffer activeColorBuffer = (colorOutput == 0) ? colorBufferA.handle : colorBufferB.handle;
-    VkBufferMemoryBarrier bufferBarrier{};
-    bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-    bufferBarrier.buffer = activeColorBuffer;
-    bufferBarrier.offset = 0;
-    bufferBarrier.size = VK_WHOLE_SIZE;
+    VulkanTexture& activeColorTex = (colorOutput == 0) ? colorTextureA : colorTextureB;
+
+    VkImageMemoryBarrier imageBarrier{};
+    imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    imageBarrier.image = activeColorTex.image;
+    imageBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imageBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageBarrier.subresourceRange.baseMipLevel = 0;
+    imageBarrier.subresourceRange.levelCount = 1;
+    imageBarrier.subresourceRange.baseArrayLayer = 0;
+    imageBarrier.subresourceRange.layerCount = 1;
 
     if (context.computeQueueFamilyIndex != context.graphicsQueueFamilyIndex)
     {
-        bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        bufferBarrier.dstAccessMask = 0;
-        bufferBarrier.srcQueueFamilyIndex = context.computeQueueFamilyIndex;
-        bufferBarrier.dstQueueFamilyIndex = context.graphicsQueueFamilyIndex;
+        imageBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        imageBarrier.dstAccessMask = 0;
+        imageBarrier.srcQueueFamilyIndex = context.computeQueueFamilyIndex;
+        imageBarrier.dstQueueFamilyIndex = context.graphicsQueueFamilyIndex;
 
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 1, &bufferBarrier, 0, nullptr);
+        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageBarrier);
     }
     else
     {
-        bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        imageBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 1, &bufferBarrier, 0, nullptr);
+        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageBarrier);
     }
 
     vkEndCommandBuffer(commandBuffer);
@@ -466,6 +442,12 @@ void FluidSystem::destroy(VkDevice device)
         descriptorPool = VK_NULL_HANDLE;
     }
 
+    if (linearSampler != VK_NULL_HANDLE)
+    {
+        vkDestroySampler(device, linearSampler, nullptr);
+        linearSampler = VK_NULL_HANDLE;
+    }
+
     if (pipelineAdvect != VK_NULL_HANDLE)
     {
         vkDestroyPipeline(device, pipelineAdvect, nullptr);
@@ -520,12 +502,12 @@ void FluidSystem::destroy(VkDevice device)
         projectDescriptorSetLayout = VK_NULL_HANDLE;
     }
 
-    velocityBufferA.destroy(device);
-    velocityBufferB.destroy(device);
-    colorBufferA.destroy(device);
-    colorBufferB.destroy(device);
-    pressureBuffer.destroy(device);
-    divergenceBuffer.destroy(device);
+    velocityTextureA.destroy(device);
+    velocityTextureB.destroy(device);
+    colorTextureA.destroy(device);
+    colorTextureB.destroy(device);
+    pressureTexture.destroy(device);
+    divergenceTexture.destroy(device);
 
     advectDescriptorSets[0] = advectDescriptorSets[1] = VK_NULL_HANDLE;
     jacobiDescriptorSet = VK_NULL_HANDLE;

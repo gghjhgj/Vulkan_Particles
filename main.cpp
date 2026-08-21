@@ -121,7 +121,7 @@ int main()
                     {
                         fluid.init(vulkanContext, Config::fluid.simWidth, Config::fluid.simHeight, "shaders/fluids/fluid.comp.spv", sizeof(FluidPushConstants));
                         
-                        renderer.setFluidBuffer(fluid.getActiveBuffer(), Config::fluid.simWidth, Config::fluid.simHeight);
+                        renderer.setFluidTexture(fluid.getActiveColorTexture(), Config::fluid.simWidth, Config::fluid.simHeight);
                         renderer.setComputeFinishedSemaphore(fluid.getComputeFinishedSemaphore());
                     }
                     else if (controlMode == ControlMode::FluidParticles || controlMode == ControlMode::FluidParticlesMusic)
@@ -142,7 +142,7 @@ int main()
                         fluidParticles.init(vulkanContext, particles, fluid, shaderPath, pushConstantSize);
                         
                         renderer.setParticleBuffer(particles.getBuffer(), particles.getCount());
-                        renderer.setFluidBuffer(fluid.getActiveBuffer(), Config::fluid.simWidth, Config::fluid.simHeight);
+                        renderer.setFluidTexture(fluid.getActiveColorTexture(), Config::fluid.simWidth, Config::fluid.simHeight);
                         renderer.setComputeFinishedSemaphore(fluid.getComputeFinishedSemaphore());
 
                         if (controlMode == ControlMode::FluidParticlesMusic)
