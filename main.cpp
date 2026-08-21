@@ -241,7 +241,7 @@ int main()
                 else if (controlMode == ControlMode::MusicParticles)
                 {
                     const MusicPush::Data &push = wasapiCapture.getMusicPush();
-
+                    //MusicPush::printData(push);
                     particles.update(
                         vulkanContext,
                         &push,

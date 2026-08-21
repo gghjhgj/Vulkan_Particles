@@ -1,5 +1,4 @@
 #pragma once
-#include "../RGBA.h"
 
 struct FluidCell
 {

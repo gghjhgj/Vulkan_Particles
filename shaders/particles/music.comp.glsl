@@ -74,22 +74,22 @@ void main()
     float peakTrigger = max(push.onset * 1.3, push.beat);
     float bassSurge = push.bassEvent * (1.0 + push.bassDeviation * 1.4);
     float energyContext = max(push.impact, bassSurge) + push.flux * 0.6;
-    float armageddonPower = energyContext * peakTrigger;
+    float burstEnergy = energyContext * peakTrigger;
 
     float randVal = random(float(id) * 12.9898 + push.rms * 78.233);
     float pCount = float(max(PARTICLE_COUNT, 1));
     
-    float probForSmallSpit = 8.0 / pCount; 
-    float probForArmageddon = mix(0.08, 0.35, trackMood); 
+    float ambientSpawnProb = 8.0 / pCount; 
+    float burstSpawnProb = mix(0.08, 0.35, trackMood); 
 
-    float baseWall = mix(0.85, 1.55, smoothstep(0.35, 0.90, push.longEnergy));
-    float armageddonFactor = smoothstep(baseWall, baseWall + 0.6, armageddonPower);
-    armageddonFactor = pow(armageddonFactor, 3.0) * (trackMood * trackMood);
+    float burstThreshold = mix(0.85, 1.55, smoothstep(0.35, 0.90, push.longEnergy));
+    float burstFactor = smoothstep(burstThreshold, burstThreshold + 0.6, burstEnergy);
+    burstFactor = pow(burstFactor, 3.0) * (trackMood * trackMood);
 
     float rawDrop = max(push.impact * 0.75, max(push.bassEvent, push.onset));
     float dropSignal = smoothstep(0.40, 0.95, rawDrop) * dynamicVolume * (0.2 + 0.8 * trackMood);
 
-    float baseTeleportProb = mix(probForSmallSpit * dropSignal, probForArmageddon, armageddonFactor);
+    float baseTeleportProb = mix(ambientSpawnProb * dropSignal, burstSpawnProb, burstFactor);
     
     float distFactor = clamp(dist / 900.0, 0.0, 1.0);
     float finalProbability = baseTeleportProb * (0.04 + 1.6 * (distFactor * distFactor));
@@ -98,7 +98,7 @@ void main()
     {
         float spawnAngle = push.direction * 3.14159; 
         float scatterOffset = (fract(float(id) * 0.789) - 0.5) * 18.0;
-        vec2 spawnOffset = vec2(cos(spawnAngle), sin(spawnAngle)) * (10.0 + armageddonFactor * 120.0);
+        vec2 spawnOffset = vec2(cos(spawnAngle), sin(spawnAngle)) * (10.0 + burstFactor * 120.0);
         vec2 perpendicular = vec2(-sin(spawnAngle), cos(spawnAngle));
         
         pos = pannedCenter + spawnOffset + perpendicular * scatterOffset;
@@ -145,19 +145,19 @@ void main()
     float safeRadius = baseSafeRadius + dynamicExpansion;
 
     float nearRim = smoothstep(safeRadius * 0.65, safeRadius * 1.06, dist);
-    float pchelkaRand = fract(sin(float(id) * 91.345 + push.rms * 123.4) * 47453.1);
+    float rimBurstRand = fract(sin(float(id) * 91.345 + push.rms * 123.4) * 47453.1);
 
     float beatImpact = max(max(push.onset * 1.25, push.bassEvent * 1.15), push.impact);
-    float pchelkaThreshold = mix(0.985, 0.955, smoothstep(0.3, 0.9, beatImpact));
+    float rimBurstThreshold = mix(0.985, 0.955, smoothstep(0.3, 0.9, beatImpact));
 
-    if (nearRim > 0.15 && pchelkaRand > pchelkaThreshold && beatImpact > 0.20) 
+    if (nearRim > 0.15 && rimBurstRand > rimBurstThreshold && beatImpact > 0.20) 
     {
         float popForce = (pow(beatImpact, 1.45) * 13.5 + push.bassDeviation * 5.0 + push.flux * 3.5) * moodScale;
         float tangentScatter = (fract(float(id) * 0.345) - 0.5) * 1.8;
         vel += (dir * popForce) + (tangent * tangentScatter * popForce * 0.40);
     }
 
-    float explosionPower = (dropSignal * 0.10) + (armageddonFactor * 0.6);
+    float explosionPower = (dropSignal * 0.10) + (burstFactor * 0.6);
     float explosion = explosionPower * (2.2 + isChorus * 2.0) * moodScale;
     vel += dir * explosion;
 
@@ -178,12 +178,12 @@ void main()
         vel -= dir * (excess * 0.022 * moodScale);
     }
 
-    float friction = mix(0.955, 0.92, armageddonFactor);
+    float friction = mix(0.955, 0.92, burstFactor);
     vel *= friction; 
 
     float speed = length(vel);
     
-    float dynamicLimit = mix(20.0, 36.0, (armageddonFactor * moodScale) + dynamicVolume * 0.25); 
+    float dynamicLimit = mix(20.0, 36.0, (burstFactor * moodScale) + dynamicVolume * 0.25); 
     if (speed > dynamicLimit)
     {
         vel = normalize(vel) * dynamicLimit;
