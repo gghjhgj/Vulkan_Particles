@@ -179,7 +179,9 @@ void main()
 
         for (int gy = minGrid.y; gy <= maxGrid.y; ++gy)
         {
-            for (int gx = minGrid.x; gx <= maxGrid.x; ++gx)
+            int startX = minGrid.x + ((minGrid.x ^ gy ^ int(id)) & 1);
+            
+            for (int gx = startX; gx <= maxGrid.x; gx += 2)
             {
                 vec2 cellPixelPos = ((vec2(gx, gy) + 0.5) / simRes) * screenRes;
                 float dist = distToSegment(cellPixelPos, prevPos, pos);

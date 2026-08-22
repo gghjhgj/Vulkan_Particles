@@ -30,6 +30,17 @@ struct FluidRenderPushConstant
     float screenHeight;
     uint32_t simWidth;
     uint32_t simHeight;
+    float sharpness;
+    float highPassLimit;
+    float normalStrength;
+    float lightDirX;
+    float lightDirY;
+    float lightDirZ;
+    float lightIntensity;
+    float ambientLight;
+    float colorBoost;
+    float gamma;
+    float exposure;
 };
 
 class Renderer
@@ -45,41 +56,37 @@ public:
     ~Renderer();
 
     void init(
-        VulkanContext& context,
-        sf::Window& window
-    );
+        VulkanContext &context,
+        sf::Window &window);
 
     void setParticleBuffer(
-        const VulkanBuffer& buffer,
-        uint32_t particleCount
-    );
+        const VulkanBuffer &buffer,
+        uint32_t particleCount);
 
     void setFluidTexture(
         const VulkanTexture &texture,
         uint32_t simWidth,
-        uint32_t simHeight
-    );
+        uint32_t simHeight);
 
-    void render(ImGuiManager& imgui);
+    void render(ImGuiManager &imgui);
 
     void destroy();
 
     void setComputeFinishedSemaphore(
-        VkSemaphore semaphore
-    );
+        VkSemaphore semaphore);
 
 private:
-    void createSurface(sf::Window& window);
+    void createSurface(sf::Window &window);
 
     void createParticlePipeline();
     void createParticleDescriptors();
     void updateParticleDescriptors();
-    
+
     void createFluidPipeline();
     void createFluidDescriptors();
     void updateFluidDescriptors();
 
-    VulkanContext* vkContext = nullptr;
+    VulkanContext *vkContext = nullptr;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     VulkanSwapchain swapchain;
     std::vector<VulkanFrameData> frames;
@@ -89,7 +96,7 @@ private:
     VkDescriptorSetLayout particleDescriptorSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool particleDescriptorPool = VK_NULL_HANDLE;
     std::vector<VkDescriptorSet> particleDescriptorSets;
-    const VulkanBuffer* particleBuffer = nullptr;
+    const VulkanBuffer *particleBuffer = nullptr;
     uint32_t particleCount = 0;
     bool particlesConfigured = false;
 
@@ -97,8 +104,8 @@ private:
     VkDescriptorSetLayout fluidDescriptorSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool fluidDescriptorPool = VK_NULL_HANDLE;
     std::vector<VkDescriptorSet> fluidDescriptorSet;
-    const VulkanTexture* fluidTexture = nullptr;
-    VkSampler fluidSampler = VK_NULL_HANDLE;   
+    const VulkanTexture *fluidTexture = nullptr;
+    VkSampler fluidSampler = VK_NULL_HANDLE;
     uint32_t fluidSimWidth = 0;
     uint32_t fluidSimHeight = 0;
     bool fluidConfigured = false;

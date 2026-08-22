@@ -1,7 +1,5 @@
 #version 450
-
 layout(local_size_x = 256) in;
-
 layout(constant_id = 0) const uint WORKGROUP_SIZE = 256;
 layout(constant_id = 1) const uint PARTICLE_COUNT = 0;
 
@@ -25,36 +23,29 @@ layout(rgba8, set = 0, binding = 2) uniform image2D inOutColor;
 
 layout(push_constant) uniform Push
 {
-    vec2 screenRes;            
-    vec2 simRes;               
-
+    vec2 screenRes;
+    vec2 simRes;
     vec2 pannedCenter;         
     vec2 spawnOffset;          
-
     vec2 spawnPerp;            
     float baseTeleportProb;    
     float rms;                 
-
     float pulse;               
     float swirl;               
     float swirlDir;            
     float safeRadius;          
-
     float driftScale; 
     float driftPhase; 
     float centerAttract;
     float chorusPush;
-
     float popForce;
     float rimBurstThreshold;   
     float velDamping;
     float dynamicLimit;
-
     float dtFactor;
     float baseRichHue;
     float hueLerpSpeed;
     float baseHueOffset;
-
     float kickFlashBright;
     float saturation;
     float forceRadius;
@@ -78,7 +69,7 @@ vec3 hsv2rgb(vec3 c)
 void main()
 {
     uint id = gl_GlobalInvocationID.x;
-    if (id >= PARTICLE_COUNT) 
+    if (id >= PARTICLE_COUNT)
         return;
 
     Particle p = particles[id];
@@ -105,7 +96,6 @@ void main()
     float randVal = random(float(id) * 12.9898 + push.rms * 78.233);
     float distFactor = clamp(dist * (1.176470588 * invScreenRes.y), 0.0, 1.0);
     float finalProbability = push.baseTeleportProb * (0.04 + 1.6 * (distFactor * distFactor));
-
     if (randVal < finalProbability) 
     {
         float scatterOffset = (fract(float(id) * 0.789) - 0.5) * 18.0;
@@ -123,22 +113,47 @@ void main()
 
     vel += dir * push.pulse;
     vel += tangent * (push.swirl * sideSign + push.swirlDir);
-
     float driftAngle = random(float(id) * 7.123) * 6.2831853 + push.driftPhase;
     vel += vec2(cos(driftAngle), sin(driftAngle)) * push.driftScale;
 
-    float nearRim = smoothstep(push.safeRadius * 0.58, push.safeRadius * 1.05, dist);
-    if (nearRim > 0.10 && push.popForce > 0.0) 
+    float rimFactor = smoothstep(push.safeRadius * 0.85, push.safeRadius * 1.01, dist);
+    if (rimFactor > 0.001) 
     {
-        float rimBurstRand = fract(sin(float(id) * 91.345 + push.rms * 123.4) * 47453.1);
-        if (rimBurstRand > push.rimBurstThreshold)
+        float angle = atan(dir.y, dir.x);
+
+        float beatEnergy = clamp(pow(push.rms, 1.2) * 2.5 + push.pulse * 0.1, 0.0, 2.5);
+        
+        float rimRipple = sin(angle * 12.0 + push.driftPhase * 3.0) * 0.65
+                        + cos(angle * 24.0 - push.driftPhase * 4.0) * 0.35;
+
+        float waveForce = rimRipple * beatEnergy * (push.popForce * 0.35 + push.pulse * 0.35);
+        
+        vel += (dir * 0.75 + tangent * 0.25) * (waveForce * rimFactor);
+
+        float cometAffinity = fract(sin(float(id) * 91.345 + 13.37) * 47453.1);
+
+        float hitGate = smoothstep(0.30, 0.80, push.rms * 1.25);
+        float energyCurve = pow(hitGate, 2.5);
+
+        float dynamicThreshold = mix(0.968, 0.910, energyCurve);
+
+        if (cometAffinity > dynamicThreshold && push.popForce > 0.0)
         {
-            vel += (dir * push.popForce) + (tangent * (fract(float(id) * 0.345) - 0.5) * 0.798 * push.popForce);
+            float normVal = (cometAffinity - dynamicThreshold) / (1.0001 - dynamicThreshold);
+            float cometCurve = pow(normVal, 1.4);
+
+            float dropBoost = mix(0.40, 2.90, energyCurve);
+
+            float cometSpeed = (0.18 + cometCurve * 1.25) * dropBoost * push.popForce;
+
+            float tangSpread = (fract(float(id) * 0.345) - 0.5) * 0.75;
+            vec2 cometDir = normalize(dir * 1.55 + tangent * tangSpread);
+
+            vel += cometDir * (cometSpeed * rimFactor);
         }
     }
 
     vel += dir * push.chorusPush;
-
     float radialSpeed = dot(vel, dir);
     float innerRadiusFactor = smoothstep(60.0, 160.0, dist);
     vel -= fromCenter * (push.centerAttract * innerRadiusFactor);
@@ -146,14 +161,15 @@ void main()
     if (dist > push.safeRadius) 
     {
         float excess = dist - push.safeRadius;
+        float brakeWindow = smoothstep(0.0, push.safeRadius * 0.75, excess);
+        
         if (radialSpeed > 0.0) {
-            vel -= dir * (radialSpeed * clamp(excess * 0.007142857, 0.0, 0.50));
+            vel -= dir * (radialSpeed * brakeWindow * 0.45);
         }
-        vel -= dir * (excess * (push.driftScale * 0.07857143));
+        vel -= dir * (excess * (push.driftScale * 0.05 + brakeWindow * 0.12));
     }
 
     vel *= push.velDamping;
-
     float speedSq = dot(vel, vel);
     float maxSpeedSq = push.dynamicLimit * push.dynamicLimit;
     if (speedSq > maxSpeedSq)
@@ -163,7 +179,7 @@ void main()
 
     vec2 prevPos = pos;
     pos += vel * push.dtFactor;
-
+    
     if (pos.x < 0.0) { vel.x *= -0.5; pos.x = 0.0; }
     else if (pos.x >= push.screenRes.x) { vel.x *= -0.5; pos.x = push.screenRes.x - 1.0; }
     if (pos.y < 0.0) { vel.y *= -0.5; pos.y = 0.0; }
@@ -178,12 +194,11 @@ void main()
 
     vec2 pDelta = pos - prevPos;
     float pDeltaSq = dot(pDelta, pDelta);
-
     if (pDeltaSq > 0.000001)
     {
         float particleSpeed = sqrt(pDeltaSq);
         float invParticleSpeed = 1.0 / particleSpeed;
-        float speedFactor = smoothstep(0.0, 4.0, particleSpeed);
+        float speedFactor = smoothstep(0.0, 3.5, particleSpeed);
 
         float storedHue = uintBitsToFloat(p.color);
         float targetBaseHue = push.baseRichHue + strandShift;
@@ -223,7 +238,11 @@ void main()
         for (int gy = minGrid.y; gy <= maxGrid.y; ++gy)
         {
             float cellY = (float(gy) + 0.5) * simToScreen.y;
-            for (int gx = minGrid.x; gx <= maxGrid.x; ++gx)
+            
+
+            int startX = minGrid.x + ((minGrid.x ^ gy ^ int(id)) & 1);
+            
+            for (int gx = startX; gx <= maxGrid.x; gx += 2)
             {
                 vec2 cellPixelPos = vec2((float(gx) + 0.5) * simToScreen.x, cellY);
                 vec2 toCell = cellPixelPos - prevPos;
@@ -270,6 +289,5 @@ void main()
             }
         }
     }
-
     particles[id] = p;
 }

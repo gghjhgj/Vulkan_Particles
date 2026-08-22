@@ -210,8 +210,8 @@ private:
 
     static inline float getRichMoodHue(float songPhase, float audioCentroid) noexcept {
         float h;
-        if (songPhase < 0.28f)       h = mix(0.85f, 0.70f, songPhase / 0.28f);
-        else if (songPhase < 0.31f)  h = mix(0.70f, 0.50f, (songPhase - 0.28f) / 0.03f);
+        if (songPhase < 0.27f)       h = mix(0.85f, 0.70f, songPhase / 0.27f);
+        else if (songPhase < 0.35f)  h = mix(0.70f, 0.50f, (songPhase - 0.28f) / 0.08f);
         else if (songPhase < 0.41f)  h = mix(0.50f, 0.33f, (songPhase - 0.31f) / 0.10f);
         else if (songPhase < 0.70f)  h = mix(0.33f, 0.10f, (songPhase - 0.41f) / 0.31f);
         else                         h = mix(0.10f, -0.06f, std::clamp((songPhase - 0.70f) / 0.22f, 0.0f, 1.0f));

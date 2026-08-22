@@ -27,6 +27,13 @@ layout(push_constant) uniform Push
     uint isMouseDown;       
 } push;
 
+shared vec2 s_vel[18][18];
+
+vec2 fetchV(ivec2 p, ivec2 maxBound)
+{
+    return texelFetch(inVelocity, clamp(p, ivec2(0), maxBound), 0).xy;
+}
+
 vec3 getVelocityColor(vec2 dir)
 {
     float len = length(dir);
@@ -47,36 +54,55 @@ float distToSegment(vec2 p, vec2 a, vec2 b)
 void main()
 {
     ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
-    if (pos.x >= int(push.simWidth) || pos.y >= int(push.simHeight)) return;
+    ivec2 localID = ivec2(gl_LocalInvocationID.xy);
+    ivec2 maxBound = ivec2(int(push.simWidth) - 1, int(push.simHeight) - 1);
+
+    s_vel[localID.x + 1][localID.y + 1] = fetchV(pos, maxBound);
+
+    if (localID.x == 0)  s_vel[0][localID.y + 1]  = fetchV(pos + ivec2(-1,  0), maxBound);
+    if (localID.x == 15) s_vel[17][localID.y + 1] = fetchV(pos + ivec2( 1,  0), maxBound);
+    if (localID.y == 0)  s_vel[localID.x + 1][0]  = fetchV(pos + ivec2( 0, -1), maxBound);
+    if (localID.y == 15) s_vel[localID.x + 1][17] = fetchV(pos + ivec2( 0,  1), maxBound);
+
+    if (localID.x == 0  && localID.y == 0)  s_vel[0][0]   = fetchV(pos + ivec2(-1, -1), maxBound);
+    if (localID.x == 15 && localID.y == 0)  s_vel[17][0]  = fetchV(pos + ivec2( 1, -1), maxBound);
+    if (localID.x == 0  && localID.y == 15) s_vel[0][17]  = fetchV(pos + ivec2(-1,  1), maxBound);
+    if (localID.x == 15 && localID.y == 15) s_vel[17][17] = fetchV(pos + ivec2( 1,  1), maxBound);
+
+    barrier();
+
+    if (pos.x > maxBound.x || pos.y > maxBound.y) return;
 
     vec2 simSize = vec2(float(push.simWidth), float(push.simHeight));
-    vec2 uv = (vec2(pos) + 0.5) / simSize;
     vec2 invSim = 1.0 / simSize;
+    vec2 uv = (vec2(pos) + 0.5) * invSim;
 
     float dt = (push.dt > 0.0 && push.dt < 0.1) ? push.dt : 0.016;
 
-    vec2 currentV = texelFetch(inVelocity, pos, 0).xy;
+    int lx = localID.x + 1;
+    int ly = localID.y + 1;
 
+    vec2 currentV = s_vel[lx][ly];
     vec2 traceUV = uv - (currentV * dt) * invSim;
     vec2 advV = texture(inVelocity, traceUV).xy;
     vec4 advC = texture(inColor, traceUV);
 
-    vec2 vL = texelFetch(inVelocity, clamp(pos + ivec2(-1, 0), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
-    vec2 vR = texelFetch(inVelocity, clamp(pos + ivec2(1, 0), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
-    vec2 vB = texelFetch(inVelocity, clamp(pos + ivec2(0, -1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
-    vec2 vT = texelFetch(inVelocity, clamp(pos + ivec2(0, 1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
+    vec2 vL = s_vel[lx - 1][ly];
+    vec2 vR = s_vel[lx + 1][ly];
+    vec2 vB = s_vel[lx][ly - 1];
+    vec2 vT = s_vel[lx][ly + 1];
 
     float curlCenter = (vR.y - vL.y) - (vT.x - vB.x);
 
-    vec2 vLL = texelFetch(inVelocity, clamp(pos + ivec2(-2, 0), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
-    vec2 vRR = texelFetch(inVelocity, clamp(pos + ivec2(2, 0), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
-    vec2 vBB = texelFetch(inVelocity, clamp(pos + ivec2(0, -2), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
-    vec2 vTT = texelFetch(inVelocity, clamp(pos + ivec2(0, 2), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).xy;
+    vec2 vTL = s_vel[lx - 1][ly + 1];
+    vec2 vTR = s_vel[lx + 1][ly + 1];
+    vec2 vBL = s_vel[lx - 1][ly - 1];
+    vec2 vBR = s_vel[lx + 1][ly - 1];
 
-    float curlL = abs((currentV.y - vLL.y) - (texelFetch(inVelocity, clamp(pos + ivec2(-1, 1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).x - texelFetch(inVelocity, clamp(pos + ivec2(-1, -1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).x));
-    float curlR = abs((vRR.y - currentV.y) - (texelFetch(inVelocity, clamp(pos + ivec2(1, 1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).x - texelFetch(inVelocity, clamp(pos + ivec2(1, -1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).x));
-    float curlB = abs((texelFetch(inVelocity, clamp(pos + ivec2(1, -1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).y - texelFetch(inVelocity, clamp(pos + ivec2(-1, -1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).y) - (currentV.x - vBB.x));
-    float curlT = abs((texelFetch(inVelocity, clamp(pos + ivec2(1, 1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).y - texelFetch(inVelocity, clamp(pos + ivec2(-1, 1), ivec2(0), ivec2(int(push.simWidth)-1, int(push.simHeight)-1)), 0).y) - (vTT.x - currentV.x));
+    float curlL = abs((currentV.y - vL.y)       - (vTL.x - vBL.x) * 0.5);
+    float curlR = abs((vR.y - currentV.y)       - (vTR.x - vBR.x) * 0.5);
+    float curlB = abs((vBR.y - vBL.y) * 0.5     - (currentV.x - vB.x));
+    float curlT = abs((vTR.y - vTL.y) * 0.5     - (vT.x - currentV.x));
 
     vec2 grad = vec2(curlR - curlL, curlT - curlB) * 0.5;
     float gradLen = length(grad);
@@ -84,7 +110,7 @@ void main()
     if (gradLen > 0.00001)
     {
         vec2 N = grad / (gradLen + 0.001);
-        vec2 force = vec2(N.y, -N.x) * curlCenter * push.vorticity; 
+        vec2 force = vec2(N.y, -N.x) * (curlCenter * push.vorticity); 
         advV += force * dt;
     }
 
@@ -137,8 +163,15 @@ void main()
 
     if ((pos.x & 1) == 0 && (pos.y & 1) == 0)
     {
-        ivec2 halfPos = pos / 2;
-        float div = 0.5 * ((vR.x - vL.x) + (vT.y - vB.y));
+        ivec2 halfPos = pos >> 1;
+        vec2 centerUV = (vec2(pos) + 1.0) * invSim;
+
+        vec2 sampleR = texture(inVelocity, centerUV + vec2( 1.5,  0.0) * invSim).xy;
+        vec2 sampleL = texture(inVelocity, centerUV + vec2(-1.5,  0.0) * invSim).xy;
+        vec2 sampleT = texture(inVelocity, centerUV + vec2( 0.0,  1.5) * invSim).xy;
+        vec2 sampleB = texture(inVelocity, centerUV + vec2( 0.0, -1.5) * invSim).xy;
+
+        float div = 0.5 * ((sampleR.x - sampleL.x) + (sampleT.y - sampleB.y));
         imageStore(outDivergence, halfPos, vec4(clamp(div, -30.0, 30.0), 0.0, 0.0, 0.0));
     }
 }

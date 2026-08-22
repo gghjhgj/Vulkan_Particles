@@ -10,6 +10,7 @@
 WindowConfig Config::window;
 ParticlesConfig Config::particles;
 FluidConfig Config::fluid;
+VisualsConfig Config::visuals;
 
 namespace {
     using Section = std::unordered_map<std::string, std::string>;
@@ -116,4 +117,17 @@ void Config::load(const std::string& path) {
     fluid.pressureIterations = get<uint32_t>(ini, "fluid", "pressure_iterations");
     fluid.splatRadius = get<float>(ini, "fluid", "splat_radius");
     fluid.splatForce = get<float>(ini, "fluid", "splat_force");
+
+    visuals.sharpness = get<float>(ini, "visuals", "sharpness");
+    visuals.highPassLimit = get<float>(ini, "visuals", "high_pass_limit");
+    visuals.normalStrength = get<float>(ini, "visuals", "normal_strength");
+    visuals.lightDirX = get<float>(ini, "visuals", "light_dir_x");
+    visuals.lightDirY = get<float>(ini, "visuals", "light_dir_y");
+    visuals.lightDirZ = get<float>(ini, "visuals", "light_dir_z");
+    visuals.lightIntensity = get<float>(ini, "visuals", "light_intensity");
+    visuals.ambientLight = get<float>(ini, "visuals", "ambient_light");
+    visuals.colorBoost = get<float>(ini, "visuals", "color_boost");
+    visuals.gamma = get<float>(ini, "visuals", "gamma");
+    visuals.exposure = get<float>(ini, "visuals", "exposure");
+    visuals.blurStrength = get<float>(ini, "visuals", "blur_strength");
 }

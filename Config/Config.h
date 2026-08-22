@@ -18,14 +18,29 @@ struct ParticlesConfig
 };
 
 struct FluidConfig {
-    uint32_t simWidth = 512;
-    uint32_t simHeight = 512;
-    float velocityDissipation = 0.985f;
-    float densityDissipation = 0.965f;
-    float vorticity = 35.0f;
-    uint32_t pressureIterations = 20;
-    float splatRadius = 0.004f;
-    float splatForce = 5000.0f;
+    uint32_t simWidth;
+    uint32_t simHeight;
+    float velocityDissipation;
+    float densityDissipation;
+    float vorticity;
+    uint32_t pressureIterations;
+    float splatRadius;
+    float splatForce;
+};
+
+struct VisualsConfig {
+    float sharpness;
+    float highPassLimit;
+    float normalStrength;
+    float lightDirX;
+    float lightDirY;
+    float lightDirZ;
+    float lightIntensity;
+    float ambientLight;
+    float colorBoost;
+    float gamma;
+    float exposure;
+    float blurStrength;
 };
 
 class Config
@@ -34,6 +49,7 @@ public:
     static WindowConfig window;
     static ParticlesConfig particles;
     static FluidConfig fluid;
+    static VisualsConfig visuals;
 
     static void load(const std::string& path);
 };

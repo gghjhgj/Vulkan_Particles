@@ -148,7 +148,7 @@ void Renderer::createParticlePipeline()
         throw std::runtime_error("Failed to create particle descriptor set layout.");
     }
 
-    std::vector<VkDescriptorSetLayout> layouts = { particleDescriptorSetLayout };
+    std::vector<VkDescriptorSetLayout> layouts = {particleDescriptorSetLayout};
 
     particleGraphicsPipeline.init(
         *vkContext,
@@ -276,7 +276,7 @@ void Renderer::createFluidPipeline()
         throw std::runtime_error("Failed to create fluid descriptor set layout.");
     }
 
-    std::vector<VkDescriptorSetLayout> layouts = { fluidDescriptorSetLayout };
+    std::vector<VkDescriptorSetLayout> layouts = {fluidDescriptorSetLayout};
 
     fluidGraphicsPipeline.init(
         *vkContext,
@@ -285,8 +285,7 @@ void Renderer::createFluidPipeline()
         VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         sizeof(FluidRenderPushConstant),
         swapchain.imageFormat,
-        layouts
-    );
+        layouts);
 }
 
 void Renderer::createFluidDescriptors()
@@ -373,7 +372,7 @@ void Renderer::setFluidTexture(
     {
         vkDeviceWaitIdle(vkContext->device);
     }
-    
+
     fluidTexture = &texture;
     fluidSimWidth = simWidth;
     fluidSimHeight = simHeight;
@@ -509,7 +508,7 @@ void Renderer::render(ImGuiManager &imgui)
     renderingInfo.pColorAttachments = &colorAttachment;
 
     vkCmdBeginRendering(commandBuffer, &renderingInfo);
-        
+
     if (fluidConfigured && fluidTexture != nullptr)
     {
         vkCmdBindPipeline(
@@ -546,6 +545,18 @@ void Renderer::render(ImGuiManager &imgui)
         push.screenHeight = static_cast<float>(swapchain.extent.height);
         push.simWidth = fluidSimWidth;
         push.simHeight = fluidSimHeight;
+
+        push.sharpness = Config::visuals.sharpness;
+        push.highPassLimit = Config::visuals.highPassLimit;
+        push.normalStrength = Config::visuals.normalStrength;
+        push.lightDirX = Config::visuals.lightDirX;
+        push.lightDirY = Config::visuals.lightDirY;
+        push.lightDirZ = Config::visuals.lightDirZ;
+        push.lightIntensity = Config::visuals.lightIntensity;
+        push.ambientLight = Config::visuals.ambientLight;
+        push.colorBoost = Config::visuals.colorBoost;
+        push.gamma = Config::visuals.gamma;
+        push.exposure = Config::visuals.exposure;
 
         vkCmdPushConstants(
             commandBuffer,
