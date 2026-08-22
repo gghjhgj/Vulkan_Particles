@@ -41,6 +41,7 @@ struct FluidRenderPushConstant
     float colorBoost;
     float gamma;
     float exposure;
+    float padding;
 };
 
 class Renderer

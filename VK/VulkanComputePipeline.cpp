@@ -1,6 +1,8 @@
 #include "VulkanComputePipeline.h"
 #include "VulkanContext.h"
 #include "VulkanBuffer.h"
+#include <fstream>
+#include <stdexcept>
 
 std::vector<char> VulkanComputePipeline::readFile(
     const std::string &filename)
@@ -51,9 +53,8 @@ void VulkanComputePipeline::init(
     const VulkanContext &context,
     const std::string &shaderPath,
     uint32_t pushConstantSize,
-    uint32_t workGroupSizeX,
     uint32_t bindingCount,
-    uint32_t specializationConstant)
+    const std::vector<uint32_t> &specConstants)
 {
     auto shaderCode = readFile(shaderPath);
     shaderModule = createShaderModule(context.device, shaderCode);
@@ -122,23 +123,28 @@ void VulkanComputePipeline::init(
     pipelineInfo.stage.module = shaderModule;
     pipelineInfo.stage.pName = "main";
 
-    uint32_t specializationData[2] = { workGroupSizeX, specializationConstant };
-    VkSpecializationMapEntry specMapEntries[2]{};
-    specMapEntries[0].constantID = 0;
-    specMapEntries[0].offset = 0;
-    specMapEntries[0].size = sizeof(uint32_t);
-
-    specMapEntries[1].constantID = 1;
-    specMapEntries[1].offset = sizeof(uint32_t);
-    specMapEntries[1].size = sizeof(uint32_t);
+    std::vector<VkSpecializationMapEntry> specMapEntries(specConstants.size());
+    for (size_t i = 0; i < specConstants.size(); ++i)
+    {
+        specMapEntries[i].constantID = static_cast<uint32_t>(i);
+        specMapEntries[i].offset = static_cast<uint32_t>(i * sizeof(uint32_t));
+        specMapEntries[i].size = sizeof(uint32_t);
+    }
 
     VkSpecializationInfo specInfo{};
-    specInfo.mapEntryCount = 2;
-    specInfo.pMapEntries = specMapEntries;
-    specInfo.dataSize = sizeof(specializationData);
-    specInfo.pData = specializationData;
+    specInfo.mapEntryCount = static_cast<uint32_t>(specMapEntries.size());
+    specInfo.pMapEntries = specMapEntries.data();
+    specInfo.dataSize = specConstants.size() * sizeof(uint32_t);
+    specInfo.pData = specConstants.data();
 
-    pipelineInfo.stage.pSpecializationInfo = &specInfo;
+    if (!specConstants.empty())
+    {
+        pipelineInfo.stage.pSpecializationInfo = &specInfo;
+    }
+    else
+    {
+        pipelineInfo.stage.pSpecializationInfo = nullptr;
+    }
 
     if (vkCreateComputePipelines(
             context.device,

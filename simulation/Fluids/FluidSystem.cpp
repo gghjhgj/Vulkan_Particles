@@ -4,7 +4,7 @@
 #include <fstream>
 #include <stdexcept>
 
-VkShaderModule FluidSystem::createShaderModule(VkDevice device, const std::string& path)
+VkShaderModule FluidSystem::createShaderModule(VkDevice device, const std::string &path)
 {
     std::ifstream file(path, std::ios::ate | std::ios::binary);
     if (!file.is_open())
@@ -19,7 +19,7 @@ VkShaderModule FluidSystem::createShaderModule(VkDevice device, const std::strin
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = buffer.size();
-    createInfo.pCode = reinterpret_cast<const uint32_t*>(buffer.data());
+    createInfo.pCode = reinterpret_cast<const uint32_t *>(buffer.data());
 
     VkShaderModule module{VK_NULL_HANDLE};
     if (vkCreateShaderModule(device, &createInfo, nullptr, &module) != VK_SUCCESS)
@@ -32,7 +32,7 @@ void FluidSystem::createComputePipeline(
     VkDevice device,
     VkShaderModule module,
     VkPipelineLayout pipelineLayout,
-    VkPipeline& outPipeline)
+    VkPipeline &outPipeline)
 {
     VkComputePipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -47,10 +47,10 @@ void FluidSystem::createComputePipeline(
 }
 
 void FluidSystem::init(
-    VulkanContext& context,
+    VulkanContext &context,
     uint32_t width,
     uint32_t height,
-    const std::string&,
+    const std::string &,
     uint32_t pushConstantSize)
 {
     this->width = width;
@@ -61,12 +61,12 @@ void FluidSystem::init(
 
     velocityTextureA.init(context, width, height, VK_FORMAT_R16G16_SFLOAT);
     velocityTextureB.init(context, width, height, VK_FORMAT_R16G16_SFLOAT);
-   
+
     colorTextureA.init(context, width, height, VK_FORMAT_R8G8B8A8_UNORM);
     colorTextureB.init(context, width, height, VK_FORMAT_R8G8B8A8_UNORM);
 
-    pressureTexture.init(context, pressWidth, pressHeight, VK_FORMAT_R32_SFLOAT);
-    divergenceTexture.init(context, pressWidth, pressHeight, VK_FORMAT_R32_SFLOAT);
+    pressureTexture.init(context, pressWidth, pressHeight, VK_FORMAT_R16_SFLOAT);
+    divergenceTexture.init(context, pressWidth, pressHeight, VK_FORMAT_R16_SFLOAT);
 
     linearSampler = VulkanTexture::createLinearClampSampler(context.device);
 
@@ -104,12 +104,22 @@ void FluidSystem::init(
     vkQueueSubmit(context.computeQueue, 1, &initSubmit, VK_NULL_HANDLE);
     vkQueueWaitIdle(context.computeQueue);
 
+    VkDescriptorSetLayoutBinding splatBindings[2]{};
+    splatBindings[0] = {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    splatBindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+
+    VkDescriptorSetLayoutCreateInfo splatLayoutInfo{};
+    splatLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    splatLayoutInfo.bindingCount = 2;
+    splatLayoutInfo.pBindings = splatBindings;
+    vkCreateDescriptorSetLayout(context.device, &splatLayoutInfo, nullptr, &splatDescriptorSetLayout);
+
     VkDescriptorSetLayoutBinding advectBindings[5]{};
     advectBindings[0] = {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     advectBindings[1] = {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
-    advectBindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
-    advectBindings[3] = {3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
-    advectBindings[4] = {4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    advectBindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    advectBindings[3] = {3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    advectBindings[4] = {4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
 
     VkDescriptorSetLayoutCreateInfo advectLayoutInfo{};
     advectLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -129,8 +139,8 @@ void FluidSystem::init(
 
     VkDescriptorSetLayoutBinding projectBindings[3]{};
     projectBindings[0] = {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
-    projectBindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
-    projectBindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    projectBindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    projectBindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
 
     VkDescriptorSetLayoutCreateInfo projectLayoutInfo{};
     projectLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -149,6 +159,9 @@ void FluidSystem::init(
     pipelineLayoutInfo.pushConstantRangeCount = (pushConstantSize > 0) ? 1 : 0;
     pipelineLayoutInfo.pPushConstantRanges = (pushConstantSize > 0) ? &pushRange : nullptr;
 
+    pipelineLayoutInfo.pSetLayouts = &splatDescriptorSetLayout;
+    vkCreatePipelineLayout(context.device, &pipelineLayoutInfo, nullptr, &splatPipelineLayout);
+
     pipelineLayoutInfo.pSetLayouts = &advectDescriptorSetLayout;
     vkCreatePipelineLayout(context.device, &pipelineLayoutInfo, nullptr, &advectPipelineLayout);
 
@@ -158,14 +171,17 @@ void FluidSystem::init(
     pipelineLayoutInfo.pSetLayouts = &projectDescriptorSetLayout;
     vkCreatePipelineLayout(context.device, &pipelineLayoutInfo, nullptr, &projectPipelineLayout);
 
+    VkShaderModule modSplat = createShaderModule(context.device, "shaders/fluids/fluid_splat.comp.spv");
     VkShaderModule modAdvect = createShaderModule(context.device, "shaders/fluids/fluid_advect.comp.spv");
     VkShaderModule modJacobi = createShaderModule(context.device, "shaders/fluids/fluid_jacobi.comp.spv");
     VkShaderModule modProject = createShaderModule(context.device, "shaders/fluids/fluid_project.comp.spv");
 
+    createComputePipeline(context.device, modSplat, splatPipelineLayout, pipelineSplat);
     createComputePipeline(context.device, modAdvect, advectPipelineLayout, pipelineAdvect);
     createComputePipeline(context.device, modJacobi, jacobiPipelineLayout, pipelineJacobi);
     createComputePipeline(context.device, modProject, projectPipelineLayout, pipelineProject);
 
+    vkDestroyShaderModule(context.device, modSplat, nullptr);
     vkDestroyShaderModule(context.device, modAdvect, nullptr);
     vkDestroyShaderModule(context.device, modJacobi, nullptr);
     vkDestroyShaderModule(context.device, modProject, nullptr);
@@ -174,36 +190,39 @@ void FluidSystem::init(
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     poolSizes[0].descriptorCount = 5;
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    poolSizes[1].descriptorCount = 10;
+    poolSizes[1].descriptorCount = 14;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = 2;
     poolInfo.pPoolSizes = poolSizes;
-    poolInfo.maxSets = 4;
+    poolInfo.maxSets = 6;
 
     vkCreateDescriptorPool(context.device, &poolInfo, nullptr, &descriptorPool);
 
-    VkDescriptorSetLayout layouts[4] = {
+    VkDescriptorSetLayout layouts[6] = {
+        splatDescriptorSetLayout,
+        splatDescriptorSetLayout,
         advectDescriptorSetLayout,
         advectDescriptorSetLayout,
         jacobiDescriptorSetLayout,
-        projectDescriptorSetLayout
-    };
+        projectDescriptorSetLayout};
 
-    VkDescriptorSet allSets[4]{};
+    VkDescriptorSet allSets[6]{};
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocInfo.descriptorPool = descriptorPool;
-    allocInfo.descriptorSetCount = 4;
+    allocInfo.descriptorSetCount = 6;
     allocInfo.pSetLayouts = layouts;
 
     vkAllocateDescriptorSets(context.device, &allocInfo, allSets);
 
-    advectDescriptorSets[0] = allSets[0];
-    advectDescriptorSets[1] = allSets[1];
-    jacobiDescriptorSet     = allSets[2];
-    projectDescriptorSet    = allSets[3];
+    splatDescriptorSets[0] = allSets[0];
+    splatDescriptorSets[1] = allSets[1];
+    advectDescriptorSets[0] = allSets[2];
+    advectDescriptorSets[1] = allSets[3];
+    jacobiDescriptorSet = allSets[4];
+    projectDescriptorSet = allSets[5];
 
     VkDescriptorImageInfo velA_SamplerInfo{linearSampler, velocityTextureA.view, VK_IMAGE_LAYOUT_GENERAL};
     VkDescriptorImageInfo velB_StorageInfo{VK_NULL_HANDLE, velocityTextureB.view, VK_IMAGE_LAYOUT_GENERAL};
@@ -218,35 +237,50 @@ void FluidSystem::init(
     VkDescriptorImageInfo press_SamplerInfo{linearSampler, pressureTexture.view, VK_IMAGE_LAYOUT_GENERAL};
     VkDescriptorImageInfo div_StorageInfo{VK_NULL_HANDLE, divergenceTexture.view, VK_IMAGE_LAYOUT_GENERAL};
 
+    VkWriteDescriptorSet splatWrites0[2]{};
+    splatWrites0[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, splatDescriptorSets[0], 0, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &velA_StorageInfo, nullptr, nullptr};
+    splatWrites0[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, splatDescriptorSets[0], 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &colA_StorageInfo, nullptr, nullptr};
+
+    VkWriteDescriptorSet splatWrites1[2]{};
+    splatWrites1[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, splatDescriptorSets[1], 0, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &velA_StorageInfo, nullptr, nullptr};
+    splatWrites1[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, splatDescriptorSets[1], 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &colB_StorageInfo, nullptr, nullptr};
+
     VkWriteDescriptorSet advectWrites0[5]{};
     advectWrites0[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 0, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &velA_SamplerInfo, nullptr, nullptr};
     advectWrites0[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 1, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &colA_SamplerInfo, nullptr, nullptr};
-    advectWrites0[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &velB_StorageInfo, nullptr, nullptr};
-    advectWrites0[3] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 3, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &colB_StorageInfo, nullptr, nullptr};
-    advectWrites0[4] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 4, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &div_StorageInfo,  nullptr, nullptr};
+    advectWrites0[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &velB_StorageInfo, nullptr, nullptr};
+    advectWrites0[3] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 3, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &colB_StorageInfo, nullptr, nullptr};
+    advectWrites0[4] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[0], 4, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &div_StorageInfo, nullptr, nullptr};
 
     VkWriteDescriptorSet advectWrites1[5]{};
     advectWrites1[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 0, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &velA_SamplerInfo, nullptr, nullptr};
     advectWrites1[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 1, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &colB_SamplerInfo, nullptr, nullptr};
-    advectWrites1[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &velB_StorageInfo, nullptr, nullptr};
-    advectWrites1[3] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 3, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &colA_StorageInfo, nullptr, nullptr};
-    advectWrites1[4] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 4, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &div_StorageInfo,  nullptr, nullptr};
+    advectWrites1[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &velB_StorageInfo, nullptr, nullptr};
+    advectWrites1[3] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 3, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &colA_StorageInfo, nullptr, nullptr};
+    advectWrites1[4] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, advectDescriptorSets[1], 4, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &div_StorageInfo, nullptr, nullptr};
 
     VkWriteDescriptorSet jacobiWrites[2]{};
     jacobiWrites[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, jacobiDescriptorSet, 0, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &press_StorageInfo, nullptr, nullptr};
-    jacobiWrites[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, jacobiDescriptorSet, 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &div_StorageInfo,   nullptr, nullptr};
+    jacobiWrites[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, jacobiDescriptorSet, 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &div_StorageInfo, nullptr, nullptr};
 
     VkWriteDescriptorSet projectWrites[3]{};
     projectWrites[0] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 0, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &press_SamplerInfo, nullptr, nullptr};
-    projectWrites[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &velB_StorageInfo,  nullptr, nullptr};
-    projectWrites[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          &velA_StorageInfo,  nullptr, nullptr};
-
-    VkWriteDescriptorSet allWrites[15]{};
+    projectWrites[1] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &velB_StorageInfo, nullptr, nullptr};
+    projectWrites[2] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, projectDescriptorSet, 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &velA_StorageInfo, nullptr, nullptr};
+    VkWriteDescriptorSet allWrites[19]{};
     uint32_t writeIndex = 0;
-    for (auto& write : advectWrites0) allWrites[writeIndex++] = write;
-    for (auto& write : advectWrites1) allWrites[writeIndex++] = write;
-    for (auto& write : jacobiWrites)  allWrites[writeIndex++] = write;
-    for (auto& write : projectWrites) allWrites[writeIndex++] = write;
+    for (auto &write : splatWrites0)
+        allWrites[writeIndex++] = write;
+    for (auto &write : splatWrites1)
+        allWrites[writeIndex++] = write;
+    for (auto &write : advectWrites0)
+        allWrites[writeIndex++] = write;
+    for (auto &write : advectWrites1)
+        allWrites[writeIndex++] = write;
+    for (auto &write : jacobiWrites)
+        allWrites[writeIndex++] = write;
+    for (auto &write : projectWrites)
+        allWrites[writeIndex++] = write;
 
     vkUpdateDescriptorSets(context.device, writeIndex, allWrites, 0, nullptr);
 
@@ -261,8 +295,8 @@ void FluidSystem::init(
 }
 
 void FluidSystem::update(
-    VulkanContext& context,
-    const void* pushData,
+    VulkanContext &context,
+    const void *pushData,
     uint32_t pushConstantSize,
     VkSemaphore waitSemaphore)
 {
@@ -299,6 +333,33 @@ void FluidSystem::update(
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
             0, 1, &barrier, 0, nullptr, 0, nullptr);
     };
+
+    bool isMouseDown = false;
+    if (pushData && pushConstantSize >= sizeof(FluidPushConstants))
+    {
+        const auto *push = static_cast<const FluidPushConstants *>(pushData);
+        isMouseDown = (push->isMouseDown != 0);
+    }
+
+    if (isMouseDown)
+    {
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineSplat);
+        vkCmdBindDescriptorSets(
+            commandBuffer,
+            VK_PIPELINE_BIND_POINT_COMPUTE,
+            splatPipelineLayout,
+            0, 1,
+            &splatDescriptorSets[colorInput],
+            0, nullptr);
+
+        if (pushData && pushConstantSize > 0)
+        {
+            vkCmdPushConstants(commandBuffer, splatPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, pushConstantSize, pushData);
+        }
+
+        vkCmdDispatch(commandBuffer, groupX, groupY, 1);
+        insertComputeBarrier(commandBuffer);
+    }
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineAdvect);
     vkCmdBindDescriptorSets(
@@ -353,7 +414,7 @@ void FluidSystem::update(
 
     vkCmdDispatch(commandBuffer, groupX, groupY, 1);
 
-    VulkanTexture& activeColorTex = (colorOutput == 0) ? colorTextureA : colorTextureB;
+    VulkanTexture &activeColorTex = (colorOutput == 0) ? colorTextureA : colorTextureB;
 
     VkImageMemoryBarrier imageBarrier{};
     imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -445,6 +506,12 @@ void FluidSystem::destroy(VkDevice device)
         linearSampler = VK_NULL_HANDLE;
     }
 
+    if (pipelineSplat != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(device, pipelineSplat, nullptr);
+        pipelineSplat = VK_NULL_HANDLE;
+    }
+
     if (pipelineAdvect != VK_NULL_HANDLE)
     {
         vkDestroyPipeline(device, pipelineAdvect, nullptr);
@@ -463,6 +530,12 @@ void FluidSystem::destroy(VkDevice device)
         pipelineProject = VK_NULL_HANDLE;
     }
 
+    if (splatPipelineLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(device, splatPipelineLayout, nullptr);
+        splatPipelineLayout = VK_NULL_HANDLE;
+    }
+
     if (advectPipelineLayout != VK_NULL_HANDLE)
     {
         vkDestroyPipelineLayout(device, advectPipelineLayout, nullptr);
@@ -479,6 +552,12 @@ void FluidSystem::destroy(VkDevice device)
     {
         vkDestroyPipelineLayout(device, projectPipelineLayout, nullptr);
         projectPipelineLayout = VK_NULL_HANDLE;
+    }
+
+    if (splatDescriptorSetLayout != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorSetLayout(device, splatDescriptorSetLayout, nullptr);
+        splatDescriptorSetLayout = VK_NULL_HANDLE;
     }
 
     if (advectDescriptorSetLayout != VK_NULL_HANDLE)
@@ -506,6 +585,7 @@ void FluidSystem::destroy(VkDevice device)
     pressureTexture.destroy(device);
     divergenceTexture.destroy(device);
 
+    splatDescriptorSets[0] = splatDescriptorSets[1] = VK_NULL_HANDLE;
     advectDescriptorSets[0] = advectDescriptorSets[1] = VK_NULL_HANDLE;
     jacobiDescriptorSet = VK_NULL_HANDLE;
     projectDescriptorSet = VK_NULL_HANDLE;

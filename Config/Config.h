@@ -26,6 +26,10 @@ struct FluidConfig {
     uint32_t pressureIterations;
     float splatRadius;
     float splatForce;
+    uint32_t offsetFromRight;
+    uint32_t offsetFromLeft;
+    float omega;
+    uint32_t pressureSteps;
 };
 
 struct VisualsConfig {

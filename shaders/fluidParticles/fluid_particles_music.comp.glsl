@@ -238,8 +238,6 @@ void main()
         for (int gy = minGrid.y; gy <= maxGrid.y; ++gy)
         {
             float cellY = (float(gy) + 0.5) * simToScreen.y;
-            
-
             int startX = minGrid.x + ((minGrid.x ^ gy ^ int(id)) & 1);
             
             for (int gx = startX; gx <= maxGrid.x; gx += 2)
@@ -262,16 +260,8 @@ void main()
 
                     vec2 addedV = forceDir * (splatBaseMag * forceInf);
                     vec2 currentV = imageLoad(inOutVelocity, coord).xy;
-                    vec2 newV = currentV + addedV;
                     
-                    float curSpeedSq = dot(newV, newV);
-                    const float MAX_FLUID_SPEED = 400.0;
-                    const float MAX_FLUID_SPEED_SQ = 160000.0;
-
-                    if (curSpeedSq > MAX_FLUID_SPEED_SQ) {
-                        float curSpeed = sqrt(curSpeedSq);
-                        newV = (newV / curSpeed) * (MAX_FLUID_SPEED + (curSpeed - MAX_FLUID_SPEED) * 0.1);
-                    }
+                    vec2 newV = currentV + addedV;
 
                     imageStore(inOutVelocity, coord, vec4(newV, 0.0, 0.0));
 

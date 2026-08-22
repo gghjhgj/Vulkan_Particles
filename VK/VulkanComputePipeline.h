@@ -15,13 +15,11 @@ class VulkanComputePipeline
 {
 public:
     void init(
-        const VulkanContext& context,
-        const std::string& shaderPath,
-        uint32_t pushConstantSize,
-        uint32_t workGroupSizeX,
-        uint32_t bindingCount,
-        uint32_t specializationConstant
-    );
+    const VulkanContext &context,
+    const std::string &shaderPath,
+    uint32_t pushConstantSize,
+    uint32_t bindingCount,
+    const std::vector<uint32_t> &specConstants);
 
     void bindBuffers(
         const VulkanContext& context,

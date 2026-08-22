@@ -7,41 +7,49 @@ layout(rg16f, binding = 2) writeonly uniform image2D outVelocity;
 
 layout(push_constant) uniform Push
 {
-    float mouseX;
-    float mouseY;
-    float prevMouseX;
-    float prevMouseY;
-    float dt;
-    float splatRadius;
-    float splatForce;
-    float velocityDissipation;
-    float densityDissipation;
-    float vorticity;        
-    uint simWidth;          
-    uint simHeight;         
-    uint windowWidth;       
-    uint windowHeight;      
-    uint isMouseDown;
+    float mouseX, mouseY, prevMouseX, prevMouseY;
+    float dt, splatRadius, splatForce;
+    float velocityDissipation, densityDissipation, vorticity;        
+    uint simWidth, simHeight, windowWidth, windowHeight;      
+    uint isMouseDown, offsetFromLeft, offsetFromRight;
 } push;
 
 void main()
 {
+    uint leftBound = push.offsetFromLeft;
+    uint rightBound = (push.simWidth > push.offsetFromRight) ? (push.simWidth - push.offsetFromRight) : 0;
     ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
-    if (pos.x >= int(push.simWidth) || pos.y >= int(push.simHeight)) return;
 
-    vec2 simSize = vec2(float(push.simWidth), float(push.simHeight));
-    vec2 uv = (vec2(pos) + 0.5) / simSize;
-    vec2 dUV = 1.0 / simSize;
+    if (pos.x < leftBound || pos.x >= rightBound || pos.x >= push.simWidth || pos.y >= push.simHeight) 
+        return;
 
-    float pR = texture(inPressure, uv + vec2(dUV.x, 0.0)).r;
-    float pL = texture(inPressure, uv - vec2(dUV.x, 0.0)).r;
-    float pT = texture(inPressure, uv + vec2(0.0, dUV.y)).r;
-    float pB = texture(inPressure, uv - vec2(0.0, dUV.y)).r;
+    vec2 invSim = 1.0 / vec2(float(push.simWidth), float(push.simHeight));
+    vec2 uv = (vec2(pos) + 0.5) * invSim;
 
-    vec2 gradP = vec2(pR - pL, pT - pB) * 0.5;
+    float pCenter = texture(inPressure, uv).r;
+    float pR = (pos.x < int(rightBound) - 1)     ? textureOffset(inPressure, uv, ivec2( 1,  0)).r : pCenter;
+    float pL = (pos.x > int(leftBound))          ? textureOffset(inPressure, uv, ivec2(-1,  0)).r : pCenter;
+    float pT = (pos.y < int(push.simHeight) - 1) ? textureOffset(inPressure, uv, ivec2( 0,  1)).r : pCenter;
+    float pB = (pos.y > 0)                       ? textureOffset(inPressure, uv, ivec2( 0, -1)).r : pCenter;
 
-    vec2 currentV = imageLoad(inVelocity, pos).xy;
-    vec2 newV = currentV - gradP;
+    float scaleX = (pos.x > int(leftBound) && pos.x < int(rightBound) - 1) ? 0.5 : 1.0;
+    float scaleY = (pos.y > 0 && pos.y < int(push.simHeight) - 1) ? 0.5 : 1.0;
+
+    vec2 gradP = vec2((pR - pL) * scaleX, (pT - pB) * scaleY);
+
+    const float MAX_PRESSURE_KICK = 500.0;
+    float gradLenSq = dot(gradP, gradP);
+    if (gradLenSq > MAX_PRESSURE_KICK * MAX_PRESSURE_KICK)
+    {
+        gradP *= (MAX_PRESSURE_KICK * inversesqrt(gradLenSq));
+    }
+
+    vec2 newV = imageLoad(inVelocity, pos).xy - gradP;
+
+    if (pos.x <= int(leftBound))          newV.x = max(0.0, newV.x);
+    if (pos.x >= int(rightBound) - 1)     newV.x = min(0.0, newV.x);
+    if (pos.y <= 0)                       newV.y = max(0.0, newV.y);
+    if (pos.y >= int(push.simHeight) - 1) newV.y = min(0.0, newV.y);
 
     imageStore(outVelocity, pos, vec4(newV, 0.0, 0.0));
 }

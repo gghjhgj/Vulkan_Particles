@@ -67,8 +67,8 @@ int main()
         FluidParticlesMusicPushConstants fluidParticlesMusicPush;
 
         sf::Vector2i lastMousePos = sf::Mouse::getPosition(window);
+        bool wasMouseDown = false;
         sf::Clock clock;
-
         while (running)
         {
             while (const std::optional event = window.pollEvent())
@@ -81,6 +81,7 @@ int main()
 
             float dt = clock.restart().asSeconds();
             sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+            bool isMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
 
             imgui.newFrame(window);
 
@@ -92,6 +93,7 @@ int main()
                 {
                     simulationStarted = true;
                     lastMousePos = sf::Mouse::getPosition(window);
+                    wasMouseDown = isMouseDown;
 
                     if (controlMode == ControlMode::MouseParticles || controlMode == ControlMode::MusicParticles)
                     {
@@ -174,11 +176,16 @@ int main()
                 }
                 else if (controlMode == ControlMode::FluidMouse)
                 {
+                    float curX = static_cast<float>(mousePos.x);
+                    float curY = static_cast<float>(mousePos.y);
+                    float prevX = wasMouseDown ? static_cast<float>(lastMousePos.x) : curX;
+                    float prevY = wasMouseDown ? static_cast<float>(lastMousePos.y) : curY;
+
                     FluidPushConstants push{};
-                    push.mouseX = static_cast<float>(mousePos.x);
-                    push.mouseY = static_cast<float>(mousePos.y);
-                    push.prevMouseX = static_cast<float>(lastMousePos.x);
-                    push.prevMouseY = static_cast<float>(lastMousePos.y);
+                    push.mouseX = curX;
+                    push.mouseY = curY;
+                    push.prevMouseX = prevX;
+                    push.prevMouseY = prevY;
                     push.dt = dt;
                     push.splatRadius = Config::fluid.splatRadius;
                     push.splatForce = Config::fluid.splatForce;
@@ -189,17 +196,23 @@ int main()
                     push.windowHeight = Config::window.height;
                     push.simWidth = Config::fluid.simWidth;
                     push.simHeight = Config::fluid.simHeight;
-                    push.isMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) ? 1 : 0;
+                    push.isMouseDown = isMouseDown ? 1 : 0;
 
                     fluid.update(vulkanContext, &push, sizeof(FluidPushConstants));
+                    renderer.setFluidTexture(fluid.getActiveColorTexture(), Config::fluid.simWidth, Config::fluid.simHeight);
                 }
                 else if (controlMode == ControlMode::FluidParticles)
                 {
+                    float curX = static_cast<float>(mousePos.x);
+                    float curY = static_cast<float>(mousePos.y);
+                    float prevX = wasMouseDown ? static_cast<float>(lastMousePos.x) : curX;
+                    float prevY = wasMouseDown ? static_cast<float>(lastMousePos.y) : curY;
+
                     FluidPushConstants push{};
-                    push.mouseX = static_cast<float>(mousePos.x);
-                    push.mouseY = static_cast<float>(mousePos.y);
-                    push.prevMouseX = static_cast<float>(lastMousePos.x);
-                    push.prevMouseY = static_cast<float>(lastMousePos.y);
+                    push.mouseX = curX;
+                    push.mouseY = curY;
+                    push.prevMouseX = prevX;
+                    push.prevMouseY = prevY;
                     push.dt = dt;
                     push.splatRadius = Config::fluid.splatRadius;
                     push.splatForce = Config::fluid.splatForce;
@@ -210,16 +223,21 @@ int main()
                     push.windowHeight = Config::window.height;
                     push.simWidth = Config::fluid.simWidth;
                     push.simHeight = Config::fluid.simHeight;
-                    push.isMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left) ? 1 : 0;
+                    push.isMouseDown = isMouseDown ? 1 : 0;
 
                     fluidParticles.update(vulkanContext, particles, fluid, &push, sizeof(FluidPushConstants));
                     fluid.update(vulkanContext, &push, sizeof(FluidPushConstants), fluidParticles.getComputeFinishedSemaphore());
+                    renderer.setFluidTexture(fluid.getActiveColorTexture(), Config::fluid.simWidth, Config::fluid.simHeight);
                 }
                 else if (controlMode == ControlMode::FluidParticlesMusic)
                 {
                     const MusicPush::Data &musicData = wasapiCapture.getMusicPush();
 
                     FluidPushConstants fluidPush{};
+                    fluidPush.mouseX = 0.0f;
+                    fluidPush.mouseY = 0.0f;
+                    fluidPush.prevMouseX = 0.0f;
+                    fluidPush.prevMouseY = 0.0f;
                     fluidPush.dt = dt;
                     fluidPush.splatRadius = Config::fluid.splatRadius;
                     fluidPush.splatForce = Config::fluid.splatForce;
@@ -230,6 +248,7 @@ int main()
                     fluidPush.windowHeight = Config::window.height;
                     fluidPush.simWidth = Config::fluid.simWidth;
                     fluidPush.simHeight = Config::fluid.simHeight;
+                    fluidPush.isMouseDown = 0;
 
                     fluidParticlesMusicPush.update(musicData, dt, Config::fluid.splatRadius, Config::fluid.splatForce,
                         Config::fluid.velocityDissipation, Config::fluid.densityDissipation, Config::fluid.vorticity,
@@ -239,11 +258,15 @@ int main()
 
                     fluidParticles.update(vulkanContext, particles, fluid, &fpData, sizeof(FluidParticlesMusicPushConstants::Data));
                     fluid.update(vulkanContext, &fluidPush, sizeof(FluidPushConstants), fluidParticles.getComputeFinishedSemaphore());
+                    renderer.setFluidTexture(fluid.getActiveColorTexture(), Config::fluid.simWidth, Config::fluid.simHeight);
                 }
             }
 
             lastMousePos = mousePos;
+            wasMouseDown = isMouseDown;
+
             renderer.render(imgui);
+
         }
 
         wasapiCapture.stop();

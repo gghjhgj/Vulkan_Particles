@@ -30,6 +30,12 @@ struct FluidPushConstants
     uint32_t windowWidth;
     uint32_t windowHeight;
     uint32_t isMouseDown;
+
+    uint32_t offsetFromRight = Config::fluid.offsetFromRight;
+    uint32_t offsetFromLeft = Config::fluid.offsetFromLeft;
+
+    float omega = Config::fluid.omega;
+    uint32_t pressureSteps = Config::fluid.pressureSteps;
 };
 
 class FluidSystem
@@ -114,15 +120,21 @@ private:
     uint8_t colorPingPong = 0;
     uint8_t velocityPingPong = 0;
 
+    VkDescriptorSetLayout splatDescriptorSetLayout{VK_NULL_HANDLE};
     VkDescriptorSetLayout advectDescriptorSetLayout{VK_NULL_HANDLE};
     VkDescriptorSetLayout jacobiDescriptorSetLayout{VK_NULL_HANDLE};
     VkDescriptorSetLayout projectDescriptorSetLayout{VK_NULL_HANDLE};
 
+    VkPipelineLayout splatPipelineLayout{VK_NULL_HANDLE};
     VkPipelineLayout advectPipelineLayout{VK_NULL_HANDLE};
     VkPipelineLayout jacobiPipelineLayout{VK_NULL_HANDLE};
     VkPipelineLayout projectPipelineLayout{VK_NULL_HANDLE};
 
     VkDescriptorPool descriptorPool{VK_NULL_HANDLE};
+
+    VkDescriptorSet splatDescriptorSets[2]{
+        VK_NULL_HANDLE,
+        VK_NULL_HANDLE};
 
     VkDescriptorSet advectDescriptorSets[2]{
         VK_NULL_HANDLE,
@@ -131,6 +143,7 @@ private:
     VkDescriptorSet jacobiDescriptorSet{VK_NULL_HANDLE};
     VkDescriptorSet projectDescriptorSet{VK_NULL_HANDLE};
 
+    VkPipeline pipelineSplat{VK_NULL_HANDLE};
     VkPipeline pipelineAdvect{VK_NULL_HANDLE};
     VkPipeline pipelineJacobi{VK_NULL_HANDLE};
     VkPipeline pipelineProject{VK_NULL_HANDLE};

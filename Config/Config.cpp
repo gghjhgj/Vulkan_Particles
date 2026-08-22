@@ -117,6 +117,10 @@ void Config::load(const std::string& path) {
     fluid.pressureIterations = get<uint32_t>(ini, "fluid", "pressure_iterations");
     fluid.splatRadius = get<float>(ini, "fluid", "splat_radius");
     fluid.splatForce = get<float>(ini, "fluid", "splat_force");
+    fluid.offsetFromRight = get<float>(ini, "fluid", "offset_from_right");
+    fluid.offsetFromLeft = get<float>(ini, "fluid", "offset_from_left");
+    fluid.omega = get<float>(ini, "fluid", "omega");
+    fluid.pressureSteps = get<float>(ini, "fluid", "pressure_steps");
 
     visuals.sharpness = get<float>(ini, "visuals", "sharpness");
     visuals.highPassLimit = get<float>(ini, "visuals", "high_pass_limit");
@@ -128,6 +132,6 @@ void Config::load(const std::string& path) {
     visuals.ambientLight = get<float>(ini, "visuals", "ambient_light");
     visuals.colorBoost = get<float>(ini, "visuals", "color_boost");
     visuals.gamma = get<float>(ini, "visuals", "gamma");
-    visuals.exposure = get<float>(ini, "visuals", "exposure");
-    visuals.blurStrength = get<float>(ini, "visuals", "blur_strength");
+    visuals.exposure = get<uint32_t>(ini, "visuals", "exposure");
+    visuals.blurStrength = get<uint32_t>(ini, "visuals", "blur_strength");
 }

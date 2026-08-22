@@ -55,12 +55,11 @@ void ParticleSystem::init(
     );
 
     computePipeline.init(
-        context,
-        shaderPath,
-        pushConstantSize,
-        256,
-        1,
-        Config::particles.count
+    context,
+    shaderPath,
+    pushConstantSize,
+    1,
+    { 256, Config::particles.count } 
     );
 
     computePipeline.bindBuffers(

@@ -138,7 +138,8 @@ void main()
     }
 
     vel *= 0.985;
-    float maxVel = 1200.0;
+    
+    float maxVel = 20000.0;
     if (length(vel) > maxVel)
         vel = normalize(vel) * maxVel;
 
@@ -204,12 +205,7 @@ void main()
                     vec2 addedV = vFromParticle * forceInf * speedFactor;
 
                     vec2 newV = currentV + addedV;
-                    float curSpeed = length(newV);
-                    
-                    const float MAX_FLUID_SPEED = 400.0;
-                    if (curSpeed > MAX_FLUID_SPEED) {
-                        newV = (newV / curSpeed) * (MAX_FLUID_SPEED + (curSpeed - MAX_FLUID_SPEED) * 0.1);
-                    }
+                    newV = clamp(newV, vec2(-60000.0), vec2(60000.0));
 
                     imageStore(inOutVelocity, coord, vec4(newV, 0.0, 0.0));
 
