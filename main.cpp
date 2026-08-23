@@ -69,6 +69,7 @@ int main()
         sf::Vector2i lastMousePos = sf::Mouse::getPosition(window);
         bool wasMouseDown = false;
         sf::Clock clock;
+
         while (running)
         {
             while (const std::optional event = window.pollEvent())
@@ -123,7 +124,7 @@ int main()
                     {
                         fluid.init(vulkanContext, Config::fluid.simWidth, Config::fluid.simHeight, "shaders/fluids/fluid.comp.spv", sizeof(FluidPushConstants));
                         
-                        renderer.setFluidTexture(fluid.getActiveColorTexture(), Config::fluid.simWidth, Config::fluid.simHeight);
+                        renderer.setFluidTexture(fluid.getActiveColorTexture(), fluid.getSimWidth(), fluid.getSimHeight());
                         renderer.setComputeFinishedSemaphore(fluid.getComputeFinishedSemaphore());
                     }
                     else if (controlMode == ControlMode::FluidParticles || controlMode == ControlMode::FluidParticlesMusic)
@@ -144,7 +145,7 @@ int main()
                         fluidParticles.init(vulkanContext, particles, fluid, shaderPath, pushConstantSize);
                         
                         renderer.setParticleBuffer(particles.getBuffer(), particles.getCount());
-                        renderer.setFluidTexture(fluid.getActiveColorTexture(), Config::fluid.simWidth, Config::fluid.simHeight);
+                        renderer.setFluidTexture(fluid.getActiveColorTexture(), fluid.getSimWidth(), fluid.getSimHeight());
                         renderer.setComputeFinishedSemaphore(fluid.getComputeFinishedSemaphore());
 
                         if (controlMode == ControlMode::FluidParticlesMusic)
@@ -192,14 +193,24 @@ int main()
                     push.velocityDissipation = Config::fluid.velocityDissipation;
                     push.densityDissipation = Config::fluid.densityDissipation;
                     push.vorticity = Config::fluid.vorticity;
-                    push.windowWidth = Config::window.width;
+
+                    push.renderWidth  = fluid.getSimWidth();
+                    push.renderHeight = fluid.getSimHeight();
+                    push.simWidth     = fluid.getSimWidth();
+                    push.simHeight    = fluid.getSimHeight();
+                    push.pressWidth   = fluid.getPressWidth();
+                    push.pressHeight  = fluid.getPressHeight();
+                    push.windowWidth  = Config::window.width;
                     push.windowHeight = Config::window.height;
-                    push.simWidth = Config::fluid.simWidth;
-                    push.simHeight = Config::fluid.simHeight;
+                    
                     push.isMouseDown = isMouseDown ? 1 : 0;
+                    push.offsetFromLeft = Config::fluid.offsetFromLeft;
+                    push.offsetFromRight = Config::fluid.offsetFromRight;
+                    push.omega = Config::fluid.omega;
+                    push.pressureSteps = Config::fluid.pressureSteps;
 
                     fluid.update(vulkanContext, &push, sizeof(FluidPushConstants));
-                    renderer.setFluidTexture(fluid.getActiveColorTexture(), Config::fluid.simWidth, Config::fluid.simHeight);
+                    renderer.setFluidTexture(fluid.getActiveColorTexture(), fluid.getSimWidth(), fluid.getSimHeight());
                 }
                 else if (controlMode == ControlMode::FluidParticles)
                 {
@@ -219,15 +230,25 @@ int main()
                     push.velocityDissipation = Config::fluid.velocityDissipation;
                     push.densityDissipation = Config::fluid.densityDissipation;
                     push.vorticity = Config::fluid.vorticity;
-                    push.windowWidth = Config::window.width;
+
+                    push.renderWidth  = fluid.getSimWidth();
+                    push.renderHeight = fluid.getSimHeight();
+                    push.simWidth     = fluid.getSimWidth();
+                    push.simHeight    = fluid.getSimHeight();
+                    push.pressWidth   = fluid.getPressWidth();
+                    push.pressHeight  = fluid.getPressHeight();
+                    push.windowWidth  = Config::window.width;
                     push.windowHeight = Config::window.height;
-                    push.simWidth = Config::fluid.simWidth;
-                    push.simHeight = Config::fluid.simHeight;
+
                     push.isMouseDown = isMouseDown ? 1 : 0;
+                    push.offsetFromLeft = Config::fluid.offsetFromLeft;
+                    push.offsetFromRight = Config::fluid.offsetFromRight;
+                    push.omega = Config::fluid.omega;
+                    push.pressureSteps = Config::fluid.pressureSteps;
 
                     fluidParticles.update(vulkanContext, particles, fluid, &push, sizeof(FluidPushConstants));
                     fluid.update(vulkanContext, &push, sizeof(FluidPushConstants), fluidParticles.getComputeFinishedSemaphore());
-                    renderer.setFluidTexture(fluid.getActiveColorTexture(), Config::fluid.simWidth, Config::fluid.simHeight);
+                    renderer.setFluidTexture(fluid.getActiveColorTexture(), fluid.getSimWidth(), fluid.getSimHeight());
                 }
                 else if (controlMode == ControlMode::FluidParticlesMusic)
                 {
@@ -244,21 +265,33 @@ int main()
                     fluidPush.velocityDissipation = Config::fluid.velocityDissipation;
                     fluidPush.densityDissipation = Config::fluid.densityDissipation;
                     fluidPush.vorticity = Config::fluid.vorticity;
-                    fluidPush.windowWidth = Config::window.width;
+
+                    fluidPush.renderWidth  = fluid.getSimWidth();
+                    fluidPush.renderHeight = fluid.getSimHeight();
+                    fluidPush.simWidth     = fluid.getSimWidth();
+                    fluidPush.simHeight    = fluid.getSimHeight();
+                    fluidPush.pressWidth   = fluid.getPressWidth();
+                    fluidPush.pressHeight  = fluid.getPressHeight();
+                    fluidPush.windowWidth  = Config::window.width;
                     fluidPush.windowHeight = Config::window.height;
-                    fluidPush.simWidth = Config::fluid.simWidth;
-                    fluidPush.simHeight = Config::fluid.simHeight;
+
                     fluidPush.isMouseDown = 0;
+                    fluidPush.offsetFromLeft = Config::fluid.offsetFromLeft;
+                    fluidPush.offsetFromRight = Config::fluid.offsetFromRight;
+                    fluidPush.offsetFromUp = Config::fluid.offsetFromUp;
+                    fluidPush.offsetFromDown = Config::fluid.offsetFromDown;
+                    fluidPush.omega = Config::fluid.omega;
+                    fluidPush.pressureSteps = Config::fluid.pressureSteps;
 
                     fluidParticlesMusicPush.update(musicData, dt, Config::fluid.splatRadius, Config::fluid.splatForce,
                         Config::fluid.velocityDissipation, Config::fluid.densityDissipation, Config::fluid.vorticity,
-                        Config::fluid.simWidth, Config::fluid.simHeight, Config::window.width, Config::window.height);
+                        fluid.getSimWidth(), fluid.getSimHeight(), Config::window.width, Config::window.height);
 
                     const auto &fpData = fluidParticlesMusicPush.get();
 
                     fluidParticles.update(vulkanContext, particles, fluid, &fpData, sizeof(FluidParticlesMusicPushConstants::Data));
                     fluid.update(vulkanContext, &fluidPush, sizeof(FluidPushConstants), fluidParticles.getComputeFinishedSemaphore());
-                    renderer.setFluidTexture(fluid.getActiveColorTexture(), Config::fluid.simWidth, Config::fluid.simHeight);
+                    renderer.setFluidTexture(fluid.getActiveColorTexture(), fluid.getSimWidth(), fluid.getSimHeight());
                 }
             }
 
@@ -266,7 +299,6 @@ int main()
             wasMouseDown = isMouseDown;
 
             renderer.render(imgui);
-
         }
 
         wasapiCapture.stop();

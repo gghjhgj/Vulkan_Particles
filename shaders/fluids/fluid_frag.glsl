@@ -9,8 +9,8 @@ layout(push_constant) uniform Push
 { 
     float screenWidth; 
     float screenHeight; 
-    uint simWidth; 
-    uint simHeight; 
+    uint renderWidth;
+    uint renderHeight; 
     
     float sharpness;
     float highPassLimit;
@@ -28,15 +28,16 @@ layout(push_constant) uniform Push
  
 void main() 
 { 
-    vec2 simTexel = 1.0 / vec2(float(push.simWidth), float(push.simHeight)); 
+    vec2 texSize = vec2(textureSize(fluidTexture, 0));
+    vec2 texel = 1.0 / texSize; 
  
-    vec2 smoothUV = inUV + simTexel * 0.5;
+    vec2 uv = inUV;
 
-    vec4 colC = texture(fluidTexture, smoothUV); 
-    vec4 colL = texture(fluidTexture, smoothUV - vec2(simTexel.x, 0.0)); 
-    vec4 colR = texture(fluidTexture, smoothUV + vec2(simTexel.x, 0.0)); 
-    vec4 colB = texture(fluidTexture, smoothUV - vec2(0.0, simTexel.y)); 
-    vec4 colT = texture(fluidTexture, smoothUV + vec2(0.0, simTexel.y)); 
+    vec4 colC = texture(fluidTexture, uv); 
+    vec4 colL = texture(fluidTexture, uv - vec2(texel.x, 0.0)); 
+    vec4 colR = texture(fluidTexture, uv + vec2(texel.x, 0.0)); 
+    vec4 colB = texture(fluidTexture, uv - vec2(0.0, texel.y)); 
+    vec4 colT = texture(fluidTexture, uv + vec2(0.0, texel.y)); 
 
     vec4 avgNeighbors = (colL + colR + colB + colT) * 0.25; 
     

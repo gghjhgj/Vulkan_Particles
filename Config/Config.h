@@ -28,8 +28,14 @@ struct FluidConfig {
     float splatForce;
     uint32_t offsetFromRight;
     uint32_t offsetFromLeft;
+    uint32_t offsetFromUp;
+    uint32_t offsetFromDown;
     float omega;
     uint32_t pressureSteps;
+    
+    uint32_t colorScale = 1;
+    uint32_t simScale = 2;
+    uint32_t pressureScale = 4;
 };
 
 struct VisualsConfig {

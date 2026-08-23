@@ -6,21 +6,17 @@ layout(rgba8, binding = 1) uniform image2D colorImage;
 
 layout(push_constant) uniform Push
 {
-    float mouseX;
-    float mouseY;
-    float prevMouseX;
-    float prevMouseY;
-    float dt;
-    float splatRadius;
-    float splatForce;
-    float velocityDissipation;
-    float densityDissipation;
-    float vorticity;        
-    uint simWidth;          
-    uint simHeight;         
-    uint windowWidth;       
-    uint windowHeight;      
-    uint isMouseDown;       
+    float mouseX, mouseY, prevMouseX, prevMouseY;
+    float dt, splatRadius, splatForce;
+    float velocityDissipation, densityDissipation, vorticity;
+    uint renderWidth, renderHeight;
+    uint simWidth, simHeight;
+    uint pressWidth, pressHeight;
+    uint windowWidth, windowHeight;
+    uint isMouseDown;
+    uint offsetFromLeft, offsetFromRight, offsetFromUp, offsetFromDown;
+    float omega;
+    uint pressureSteps;
 } push;
 
 float distToSegment(vec2 p, vec2 a, vec2 b)
@@ -46,6 +42,19 @@ void main()
 
     ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
     if (pos.x >= int(push.simWidth) || pos.y >= int(push.simHeight)) return;
+
+    float scaleX = float(push.simWidth) / float(push.windowWidth);
+    float scaleY = float(push.simHeight) / float(push.windowHeight);
+
+    uint leftBound = uint(float(push.offsetFromLeft) * scaleX);
+    uint rightOffset = uint(float(push.offsetFromRight) * scaleX);
+    uint rightBound = (push.simWidth > rightOffset) ? (push.simWidth - rightOffset) : 0;
+
+    uint upBound = uint(float(push.offsetFromUp) * scaleY);
+    uint downOffset = uint(float(push.offsetFromDown) * scaleY);
+    uint downBound = (push.simHeight > downOffset) ? (push.simHeight - downOffset) : 0;
+
+    if (pos.x < int(leftBound) || pos.x >= int(rightBound) || pos.y < int(upBound) || pos.y >= int(downBound)) return;
 
     vec2 screenRes = vec2(
         push.windowWidth > 0 ? float(push.windowWidth) : 1920.0,
@@ -80,7 +89,8 @@ void main()
     vec2 forceDir = fwd * 0.7 + side * (swirl * 1.3);
 
     vec2 mForceUV = forceDir * (max(mouseSpeed, 2.0) / screenRes.x);
-    currentV += mForceUV * push.splatForce * forceInf * speedFactor;
+    float simScaleFactor = simSize.x / screenRes.x;
+    currentV += mForceUV * push.splatForce * simScaleFactor * forceInf * speedFactor;
 
     currentV = clamp(currentV, vec2(-60000.0), vec2(60000.0));
 

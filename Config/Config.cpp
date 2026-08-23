@@ -117,10 +117,15 @@ void Config::load(const std::string& path) {
     fluid.pressureIterations = get<uint32_t>(ini, "fluid", "pressure_iterations");
     fluid.splatRadius = get<float>(ini, "fluid", "splat_radius");
     fluid.splatForce = get<float>(ini, "fluid", "splat_force");
-    fluid.offsetFromRight = get<float>(ini, "fluid", "offset_from_right");
-    fluid.offsetFromLeft = get<float>(ini, "fluid", "offset_from_left");
+    fluid.offsetFromRight = get<uint32_t>(ini, "fluid", "offset_from_right");
+    fluid.offsetFromLeft = get<uint32_t>(ini, "fluid", "offset_from_left");
+    fluid.offsetFromUp = get<uint32_t>(ini, "fluid", "offset_from_up");
+    fluid.offsetFromDown = get<uint32_t>(ini, "fluid", "offset_from_down");
     fluid.omega = get<float>(ini, "fluid", "omega");
     fluid.pressureSteps = get<float>(ini, "fluid", "pressure_steps");
+    fluid.colorScale = get<uint32_t>(ini, "fluid", "colorScale");
+    fluid.simScale = get<uint32_t>(ini, "fluid", "simScale");
+    fluid.pressureScale = get<uint32_t>(ini, "fluid", "pressureScale");
 
     visuals.sharpness = get<float>(ini, "visuals", "sharpness");
     visuals.highPassLimit = get<float>(ini, "visuals", "high_pass_limit");
