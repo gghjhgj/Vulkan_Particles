@@ -29,6 +29,11 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY
 # OPTIONS
 # ================================================================
 
+option(ENABLE_ASAN
+    "Enable AddressSanitizer (ASan)"
+    OFF
+)
+
 option(BUILD_SHADERS
     "Compile GLSL shaders"
     ON
@@ -532,6 +537,43 @@ if(MSVC)
 endif()
 
 # ================================================================
+# SANITIZERS (ASAN)
+# ================================================================
+
+if(ENABLE_ASAN)
+
+    message(STATUS "")
+    message(STATUS "================================================")
+    message(STATUS "AddressSanitizer (ASan): ENABLED")
+    message(STATUS "================================================")
+
+    if(MSVC)
+
+        target_compile_options(app
+            PRIVATE
+                /fsanitize=address
+                /Zi
+        )
+
+    else()
+
+        target_compile_options(app
+            PRIVATE
+                -fsanitize=address,undefined
+                -fno-omit-frame-pointer
+                -g
+        )
+
+        target_link_options(app
+            PRIVATE
+                -fsanitize=address,undefined
+        )
+
+    endif()
+
+endif()
+
+# ================================================================
 # SHADERS
 # ================================================================
 
@@ -832,6 +874,10 @@ message(STATUS
 
 message(STATUS
     "Shaders:        ${BUILD_SHADERS}"
+)
+
+message(STATUS
+    "ASan:           ${ENABLE_ASAN}"
 )
 
 message(STATUS

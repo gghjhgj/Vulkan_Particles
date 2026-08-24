@@ -1,4 +1,9 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "../common/fluid_push.glsl"
+#include "../common/math.glsl"
+
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(binding = 0) uniform sampler2D inPressure;
@@ -9,36 +14,7 @@ layout(rg16f, binding = 3) writeonly uniform image2D outVelocity;
 layout(rgba8, set = 0, binding = 4) uniform image2D outColor;
 layout(r16f, binding = 5) writeonly uniform image2D outDivergence;
 
-layout(push_constant) uniform Push
-{
-    float mouseX, mouseY, prevMouseX, prevMouseY;
-    float dt, splatRadius, splatForce;
-    float velocityDissipation, densityDissipation, vorticity;
-    uint renderWidth, renderHeight;
-    uint simWidth, simHeight;
-    uint pressWidth, pressHeight;
-    uint windowWidth, windowHeight;
-    uint isMouseDown;
-    uint offsetFromLeft, offsetFromRight, offsetFromUp, offsetFromDown;
-    float omega;
-    uint pressureSteps;
-} push;
-
 shared vec2 s_vel[18][19];
-
-vec2 applySoftSpeedLimitFast(vec2 v, float threshold, float hardMax)
-{
-    float speedSq = dot(v, v);
-    if (speedSq > threshold * threshold)
-    {
-        float speed = sqrt(speedSq);
-        float excess = speed - threshold;
-        float maxExcess = hardMax - threshold;
-        float compressed = threshold + maxExcess * (excess / (excess + maxExcess));
-        return (v / speed) * compressed;
-    }
-    return v;
-}
 
 vec2 getProjectedVelocity(ivec2 p, ivec2 minBound, ivec2 maxBound, vec2 invSim, vec2 invPress, uint leftBound, uint rightBound, uint upBound, uint downBound)
 {
@@ -189,7 +165,7 @@ void main()
     if (dBottom < margin && advV.y > 0.0) advV.y *= smoothstep(0.0, 1.0, dBottom / margin);
 
     advV = applySoftSpeedLimitFast(advV, 400.0, 800.0);
-    vec4 finalColor = max(advC * push.densityDissipation - vec4(0.6 / 255.0), vec4(0.0));
+    vec4 finalColor = max(advC * push.densityDissipation - vec4(0.5 / 255.0), vec4(0.0));
 
     imageStore(outVelocity, pos, vec4(advV * push.velocityDissipation, 0.0, 0.0));
     imageStore(outColor, pos, finalColor);

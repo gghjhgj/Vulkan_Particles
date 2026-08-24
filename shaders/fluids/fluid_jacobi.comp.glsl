@@ -1,23 +1,12 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "../common/fluid_push.glsl"
+
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(r16f, binding = 0) uniform image2D imgPressure;
 layout(r16f, binding = 1) readonly uniform image2D imgDivergence;
-
-layout(push_constant) uniform Push
-{
-    float mouseX, mouseY, prevMouseX, prevMouseY;
-    float dt, splatRadius, splatForce;
-    float velocityDissipation, densityDissipation, vorticity;
-    uint renderWidth, renderHeight;
-    uint simWidth, simHeight;
-    uint pressWidth, pressHeight;
-    uint windowWidth, windowHeight;
-    uint isMouseDown;
-    uint offsetFromLeft, offsetFromRight, offsetFromUp, offsetFromDown;
-    float omega;
-    uint pressureSteps;
-} push;
 
 shared float tileP[18][19];
 

@@ -123,7 +123,6 @@ void Config::load(const std::string& path) {
     fluid.offsetFromDown = get<uint32_t>(ini, "fluid", "offset_from_down");
     fluid.omega = get<float>(ini, "fluid", "omega");
     fluid.pressureSteps = get<float>(ini, "fluid", "pressure_steps");
-    fluid.colorScale = get<uint32_t>(ini, "fluid", "colorScale");
     fluid.simScale = get<uint32_t>(ini, "fluid", "simScale");
     fluid.pressureScale = get<uint32_t>(ini, "fluid", "pressureScale");
 

@@ -1,20 +1,15 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "../common/particle.glsl"
+#include "../common/fluid_push.glsl"
+#include "../common/math.glsl"
+#include "../common/color.glsl"
 
 layout(local_size_x = 256) in;
 
 layout(constant_id = 0) const uint WORKGROUP_SIZE = 256;
 layout(constant_id = 1) const uint PARTICLE_COUNT = 0;
-
-struct Particle
-{
-    float x;
-    float y;
-    float prevX;
-    float prevY;
-    float vx;
-    float vy;
-    uint color;
-};
 
 layout(std430, set = 0, binding = 0) buffer ParticleBuffer
 {
@@ -23,24 +18,6 @@ layout(std430, set = 0, binding = 0) buffer ParticleBuffer
 
 layout(rg16f, set = 0, binding = 1) uniform image2D inOutVelocity;
 layout(rgba8, set = 0, binding = 2) uniform image2D inOutColor;
-layout(push_constant) uniform Push
-{
-    float mouseX;
-    float mouseY;
-    float prevMouseX;
-    float prevMouseY;
-    float dt;
-    float splatRadius;
-    float splatForce;
-    float velocityDissipation;
-    float densityDissipation;
-    float vorticity;
-    uint simWidth;
-    uint simHeight;
-    uint windowWidth;
-    uint windowHeight;
-    uint isMouseDown;
-} push;
 
 vec2 sampleFluidVelocity(vec2 uv)
 {
@@ -59,23 +36,6 @@ vec2 sampleFluidVelocity(vec2 uv)
     vec2 v11 = imageLoad(inOutVelocity, ivec2(i1.x, i1.y)).xy;
 
     return mix(mix(v00, v10, f.x), mix(v01, v11, f.x), f.y);
-}
-
-vec3 getVelocityColor(vec2 dir)
-{
-    float len = length(dir);
-    if (len < 0.001) return vec3(0.0, 0.8, 1.0);
-    float angle = atan(dir.y, dir.x);
-    return 0.5 + 0.5 * cos(angle + vec3(0.0, 2.0, 4.0));
-}
-
-float distToSegment(vec2 p, vec2 a, vec2 b)
-{
-    vec2 pa = p - a;
-    vec2 ba = b - a;
-    float d = dot(ba, ba);
-    float h = (d > 0.00001) ? clamp(dot(pa, ba) / d, 0.0, 1.0) : 0.0;
-    return length(pa - ba * h);
 }
 
 void main()
@@ -191,13 +151,14 @@ void main()
                 {
                     ivec2 coord = ivec2(gx, gy);
 
-                    float forceInf = exp(-(dist * dist) / denomForce);
+                    float forceFade = clamp(1.0 - (dist * dist) / (forceRadius * forceRadius), 0.0, 1.0);
+                    float forceInf = exp(-(dist * dist) / denomForce) * forceFade;
                     vec2 pDeltaUV = pDelta / screenRes;
 
                     vec2 toCell = cellPixelPos - prevPos;
                     float sideDist = dot(toCell, side);
                     float swirl = clamp(sideDist / max(forceRadius, 0.001), -1.0, 1.0);
-                    vec2 forceDir = fwd * 0.7 + side * (swirl * 1.3);
+                    vec2 forceDir = fwd * 0.35 + side * (swirl * 2.4);
 
                     vec2 vFromParticle = forceDir * (length(pDeltaUV) * push.splatForce);
 
@@ -210,10 +171,14 @@ void main()
                     imageStore(inOutVelocity, coord, vec4(newV, 0.0, 0.0));
 
                     float colorRadius = forceRadius * 0.9;
-                    if (dist < colorRadius)
+                    float colorRadiusSq = colorRadius * colorRadius;
+                    float distSq = dist * dist;
+
+                    if (distSq < colorRadiusSq)
                     {
-                        float colorInf = exp(-(dist * dist) / denomColor);
-                        float mixIntensity = clamp(colorInf * 0.65 * (0.1 + 0.9 * speedFactor), 0.0, 1.0);
+                        float colorEdgeFade = smoothstep(colorRadiusSq, colorRadiusSq * 0.4, distSq);
+                        float colorInf = exp(-distSq / denomColor);
+                        float mixIntensity = clamp(colorInf * 0.65 * (0.1 + 0.9 * speedFactor) * colorEdgeFade, 0.0, 1.0);
 
                         vec4 currentC = imageLoad(inOutColor, coord);
                         vec3 newC = mix(currentC.rgb, dyeColor, mixIntensity);

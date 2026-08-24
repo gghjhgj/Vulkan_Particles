@@ -5,96 +5,103 @@
         "minor": 21,
         "patch": 0
     },
-
     "configurePresets": [
         {
             "name": "debug",
             "displayName": "Debug - GCC",
             "description": "GCC debug build",
             "generator": "MinGW Makefiles",
-
             "binaryDir": "${sourceDir}/build/debug",
-
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_ASAN": "OFF",
                 "BUILD_SHADERS": "ON",
                 "USE_MIMALLOC": "ON",
                 "USE_DEAR_IMGUI": "ON"
             }
         },
-
+        {
+            "name": "asan",
+            "displayName": "ASan - Leak & Memory Check",
+            "description": "Debug build with AddressSanitizer enabled via Clang",
+            "generator": "MinGW Makefiles",
+            "binaryDir": "${sourceDir}/build/asan",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "ENABLE_ASAN": "ON",
+                "USE_MIMALLOC": "OFF",
+                "BUILD_SHADERS": "ON",
+                "USE_DEAR_IMGUI": "ON"
+            }
+        },
         {
             "name": "release",
             "displayName": "Release - GCC",
             "description": "Optimized GCC release build",
             "generator": "MinGW Makefiles",
-
             "binaryDir": "${sourceDir}/build/release",
-
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_ASAN": "OFF",
                 "BUILD_SHADERS": "ON",
                 "USE_MIMALLOC": "ON",
                 "USE_DEAR_IMGUI": "ON"
             }
         },
-
         {
             "name": "release-no-imgui",
             "displayName": "Release - GCC - No ImGui",
             "description": "Optimized build without Dear ImGui",
             "generator": "MinGW Makefiles",
-
             "binaryDir": "${sourceDir}/build/release-no-imgui",
-
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_ASAN": "OFF",
                 "BUILD_SHADERS": "ON",
                 "USE_MIMALLOC": "ON",
                 "USE_DEAR_IMGUI": "OFF"
             }
         },
-
         {
             "name": "clang-release",
             "displayName": "Release - Clang",
             "description": "Optimized Clang build",
             "generator": "MinGW Makefiles",
-
             "binaryDir": "${sourceDir}/build/clang-release",
-
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-
+                "ENABLE_ASAN": "OFF",
                 "CMAKE_C_COMPILER": "clang",
                 "CMAKE_CXX_COMPILER": "clang++",
-
                 "BUILD_SHADERS": "ON",
                 "USE_MIMALLOC": "ON",
                 "USE_DEAR_IMGUI": "ON"
             }
         }
     ],
-
     "buildPresets": [
         {
             "name": "build-debug",
             "configurePreset": "debug",
             "jobs": 0
         },
-
+        {
+            "name": "build-asan",
+            "configurePreset": "asan",
+            "jobs": 0
+        },
         {
             "name": "build-release",
             "configurePreset": "release",
             "jobs": 0
         },
-
         {
             "name": "build-release-no-imgui",
             "configurePreset": "release-no-imgui",
             "jobs": 0
         },
-
         {
             "name": "build-clang-release",
             "configurePreset": "clang-release",

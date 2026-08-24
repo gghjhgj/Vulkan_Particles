@@ -22,6 +22,7 @@
 #include <vector>
 #include <optional>
 #include <thread>
+#include <algorithm>
 
 int main()
 {
@@ -59,6 +60,10 @@ int main()
 
         bool running = true;
         bool simulationStarted = false;
+        float warmupTimer = 0.0f;
+
+        bool needsGpuFlush = false;
+        sf::Clock renderTimer;
 
         ControlMode controlMode = ControlMode::None;
 
@@ -80,7 +85,15 @@ int main()
                     running = false;
             }
 
-            float dt = clock.restart().asSeconds();
+            if (simulationStarted && (warmupTimer < 2.0f || needsGpuFlush))
+            {
+                vkDeviceWaitIdle(vulkanContext.device);
+                needsGpuFlush = false;
+            }
+
+            float rawDt = clock.restart().asSeconds();
+            float dt = std::min(rawDt, 0.033f);
+
             sf::Vector2i mousePos = sf::Mouse::getPosition(window);
             bool isMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
 
@@ -93,6 +106,11 @@ int main()
                 if (controlMode != ControlMode::None)
                 {
                     simulationStarted = true;
+                    warmupTimer = 0.0f;
+                    needsGpuFlush = true;
+
+                    clock.restart();
+
                     lastMousePos = sf::Mouse::getPosition(window);
                     wasMouseDown = isMouseDown;
 
@@ -162,6 +180,9 @@ int main()
 
             if (simulationStarted)
             {
+                warmupTimer += dt;
+                float audioRampUp = std::clamp(warmupTimer / 2.0f, 0.0f, 1.0f);
+
                 if (controlMode == ControlMode::MouseParticles)
                 {
                     ComputePush push{};
@@ -172,7 +193,13 @@ int main()
                 }
                 else if (controlMode == ControlMode::MusicParticles)
                 {
-                    const MusicPush::Data &push = wasapiCapture.getMusicPush();
+                    MusicPush::Data push = wasapiCapture.getMusicPush();
+                    
+                    push.bass *= audioRampUp;
+                    push.mid *= audioRampUp;
+                    push.treble *= audioRampUp;
+                    push.rms *= audioRampUp;
+
                     particles.update(vulkanContext, &push, sizeof(push));
                 }
                 else if (controlMode == ControlMode::FluidMouse)
@@ -261,7 +288,7 @@ int main()
                     fluidPush.prevMouseY = 0.0f;
                     fluidPush.dt = dt;
                     fluidPush.splatRadius = Config::fluid.splatRadius;
-                    fluidPush.splatForce = Config::fluid.splatForce;
+                    fluidPush.splatForce = Config::fluid.splatForce * audioRampUp;
                     fluidPush.velocityDissipation = Config::fluid.velocityDissipation;
                     fluidPush.densityDissipation = Config::fluid.densityDissipation;
                     fluidPush.vorticity = Config::fluid.vorticity;
@@ -283,7 +310,7 @@ int main()
                     fluidPush.omega = Config::fluid.omega;
                     fluidPush.pressureSteps = Config::fluid.pressureSteps;
 
-                    fluidParticlesMusicPush.update(musicData, dt, Config::fluid.splatRadius, Config::fluid.splatForce,
+                    fluidParticlesMusicPush.update(musicData, dt, Config::fluid.splatRadius, Config::fluid.splatForce * audioRampUp,
                         Config::fluid.velocityDissipation, Config::fluid.densityDissipation, Config::fluid.vorticity,
                         fluid.getSimWidth(), fluid.getSimHeight(), Config::window.width, Config::window.height);
 
@@ -298,7 +325,14 @@ int main()
             lastMousePos = mousePos;
             wasMouseDown = isMouseDown;
 
+            renderTimer.restart();
             renderer.render(imgui);
+            float renderDuration = renderTimer.getElapsedTime().asSeconds();
+
+            if (renderDuration > 0.040f)
+            {
+                needsGpuFlush = true;
+            }
         }
 
         wasapiCapture.stop();

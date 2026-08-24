@@ -1,5 +1,9 @@
 #version 450
-#include "common/particle.glsl"
+
+#extension GL_GOOGLE_include_directive : require
+
+#include "../common/particle.glsl"
+#include "../common/math.glsl"
 
 layout(constant_id = 1) const uint PARTICLE_COUNT = 0;
 layout(local_size_x = 256) in;
@@ -41,10 +45,6 @@ layout(push_constant) uniform Push
     float bassDeviation;
     float direction;
 } push;
-
-float random(float seed) {
-    return fract(sin(seed) * 43758.5453123);
-}
 
 void main()
 {

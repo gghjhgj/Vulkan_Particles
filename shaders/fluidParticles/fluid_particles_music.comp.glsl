@@ -1,18 +1,13 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "../common/particle.glsl"
+#include "../common/math.glsl"
+#include "../common/color.glsl"
+
 layout(local_size_x = 256) in;
 layout(constant_id = 0) const uint WORKGROUP_SIZE = 256;
 layout(constant_id = 1) const uint PARTICLE_COUNT = 0;
-
-struct Particle
-{
-    float x;
-    float y;
-    float prevX;
-    float prevY;
-    float vx;
-    float vy;
-    uint color;
-};
 
 layout(std430, set = 0, binding = 0) buffer ParticleBuffer {
     Particle particles[];
@@ -53,18 +48,6 @@ layout(push_constant) uniform Push
 } push;
 
 const float STRAND_SHIFTS[4] = float[4](-0.06, 0.0, 0.05, 0.09);
-
-float random(float seed)
-{
-    return fract(sin(seed) * 43758.5453123);
-}
-
-vec3 hsv2rgb(vec3 c)
-{
-    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
 
 void main()
 {
@@ -240,7 +223,7 @@ void main()
             float cellY = (float(gy) + 0.5) * simToScreen.y;
             int startX = minGrid.x + ((minGrid.x ^ gy ^ int(id)) & 1);
             
-            for (int gx = startX; gx <= maxGrid.x; gx += 2)
+            for (int gx = startX; gx <= maxGrid.x; gx += 1)
             {
                 vec2 cellPixelPos = vec2((float(gx) + 0.5) * simToScreen.x, cellY);
                 vec2 toCell = cellPixelPos - prevPos;

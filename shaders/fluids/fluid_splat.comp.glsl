@@ -1,40 +1,15 @@
 #version 450
+
+#extension GL_GOOGLE_include_directive : require
+
+#include "../common/fluid_push.glsl"
+#include "../common/math.glsl"
+#include "../common/color.glsl"
+
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(rg16f, binding = 0) uniform image2D velocityImage;
 layout(rgba8, binding = 1) uniform image2D colorImage;
-
-layout(push_constant) uniform Push
-{
-    float mouseX, mouseY, prevMouseX, prevMouseY;
-    float dt, splatRadius, splatForce;
-    float velocityDissipation, densityDissipation, vorticity;
-    uint renderWidth, renderHeight;
-    uint simWidth, simHeight;
-    uint pressWidth, pressHeight;
-    uint windowWidth, windowHeight;
-    uint isMouseDown;
-    uint offsetFromLeft, offsetFromRight, offsetFromUp, offsetFromDown;
-    float omega;
-    uint pressureSteps;
-} push;
-
-float distToSegment(vec2 p, vec2 a, vec2 b)
-{
-    vec2 pa = p - a;
-    vec2 ba = b - a;
-    float d = dot(ba, ba);
-    float h = (d > 0.00001) ? clamp(dot(pa, ba) / d, 0.0, 1.0) : 0.0;
-    return length(pa - ba * h);
-}
-
-vec3 getVelocityColor(vec2 dir)
-{
-    float len = length(dir);
-    if (len < 0.001) return vec3(0.0, 0.8, 1.0);
-    float angle = atan(dir.y, dir.x);
-    return 0.5 + 0.5 * cos(angle + vec3(0.0, 2.0, 4.0));
-}
 
 void main()
 {

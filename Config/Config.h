@@ -33,9 +33,8 @@ struct FluidConfig {
     float omega;
     uint32_t pressureSteps;
     
-    uint32_t colorScale = 1;
-    uint32_t simScale = 2;
-    uint32_t pressureScale = 4;
+    uint32_t simScale;
+    uint32_t pressureScale;
 };
 
 struct VisualsConfig {
