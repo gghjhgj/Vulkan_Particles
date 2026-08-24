@@ -12,8 +12,8 @@ shared float tileP[18][19];
 
 void main()
 {
-    float scaleX = float(push.pressWidth) / float(push.windowWidth);
-    float scaleY = float(push.pressHeight) / float(push.windowHeight);
+    float scaleX = float(push.pressWidth) / 1920.0;
+    float scaleY = float(push.pressHeight) / 1080.0;
 
     uint leftBound = uint(float(push.offsetFromLeft) * scaleX);
     uint rightOffset = uint(float(push.offsetFromRight) * scaleX);

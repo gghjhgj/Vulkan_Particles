@@ -57,9 +57,20 @@ void main()
 
     Particle p = particles[id];
 
+    float scale = push.screenRes.y / 1080.0;
     vec2 invScreenRes = 1.0 / push.screenRes;
     vec2 simToScreen = push.screenRes / push.simRes;
     float strandShift = STRAND_SHIFTS[id & 3u];
+
+    float pulse        = push.pulse * scale;
+    float swirl        = push.swirl * scale;
+    float swirlDir     = push.swirlDir * scale;
+    float driftScale   = push.driftScale * scale;
+    float safeRadius   = push.safeRadius * scale;
+    float chorusPush   = push.chorusPush * scale;
+    float popForce     = push.popForce * scale;
+    float dynamicLimit = push.dynamicLimit * scale;
+    float forceRadius  = max(push.forceRadius * scale, 1.0);
 
     if (isnan(p.x) || isnan(p.vx) || p.color == 0u)
     {
@@ -77,12 +88,13 @@ void main()
     float dist = length(fromCenter);
 
     float randVal = random(float(id) * 12.9898 + push.rms * 78.233);
-    float distFactor = clamp(dist * (1.176470588 * invScreenRes.y), 0.0, 1.0);
+    float distFactor = clamp(dist / (0.85 * push.screenRes.y), 0.0, 1.0);
     float finalProbability = push.baseTeleportProb * (0.04 + 1.6 * (distFactor * distFactor));
+    
     if (randVal < finalProbability) 
     {
-        float scatterOffset = (fract(float(id) * 0.789) - 0.5) * 18.0;
-        pos = push.pannedCenter + push.spawnOffset + push.spawnPerp * scatterOffset;
+        float scatterOffset = (fract(float(id) * 0.789) - 0.5) * (18.0 * scale);
+        pos = push.pannedCenter + (push.spawnOffset * scale) + (push.spawnPerp * scatterOffset);
         vel = vec2(0.0);
         
         fromCenter = pos - push.pannedCenter;
@@ -94,40 +106,34 @@ void main()
     vec2 tangent = vec2(-dir.y, dir.x);
     float sideSign = (fract(float(id) * 0.543) > 0.5) ? 1.0 : -1.0;
 
-    vel += dir * push.pulse;
-    vel += tangent * (push.swirl * sideSign + push.swirlDir);
+    vel += dir * pulse;
+    vel += tangent * (swirl * sideSign + swirlDir);
     float driftAngle = random(float(id) * 7.123) * 6.2831853 + push.driftPhase;
-    vel += vec2(cos(driftAngle), sin(driftAngle)) * push.driftScale;
+    vel += vec2(cos(driftAngle), sin(driftAngle)) * driftScale;
 
-    float rimFactor = smoothstep(push.safeRadius * 0.85, push.safeRadius * 1.01, dist);
+    float rimFactor = smoothstep(safeRadius * 0.85, safeRadius * 1.01, dist);
     if (rimFactor > 0.001) 
     {
         float angle = atan(dir.y, dir.x);
-
         float beatEnergy = clamp(pow(push.rms, 1.2) * 2.5 + push.pulse * 0.1, 0.0, 2.5);
         
         float rimRipple = sin(angle * 12.0 + push.driftPhase * 3.0) * 0.65
                         + cos(angle * 24.0 - push.driftPhase * 4.0) * 0.35;
 
-        float waveForce = rimRipple * beatEnergy * (push.popForce * 0.35 + push.pulse * 0.35);
-        
+        float waveForce = rimRipple * beatEnergy * (popForce * 0.35 + pulse * 0.35);
         vel += (dir * 0.75 + tangent * 0.25) * (waveForce * rimFactor);
 
         float cometAffinity = fract(sin(float(id) * 91.345 + 13.37) * 47453.1);
-
         float hitGate = smoothstep(0.30, 0.80, push.rms * 1.25);
         float energyCurve = pow(hitGate, 2.5);
-
         float dynamicThreshold = mix(0.968, 0.910, energyCurve);
 
-        if (cometAffinity > dynamicThreshold && push.popForce > 0.0)
+        if (cometAffinity > dynamicThreshold && popForce > 0.0)
         {
             float normVal = (cometAffinity - dynamicThreshold) / (1.0001 - dynamicThreshold);
             float cometCurve = pow(normVal, 1.4);
-
             float dropBoost = mix(0.40, 2.90, energyCurve);
-
-            float cometSpeed = (0.18 + cometCurve * 1.25) * dropBoost * push.popForce;
+            float cometSpeed = (0.18 + cometCurve * 1.25) * dropBoost * popForce;
 
             float tangSpread = (fract(float(id) * 0.345) - 0.5) * 0.75;
             vec2 cometDir = normalize(dir * 1.55 + tangent * tangSpread);
@@ -136,28 +142,29 @@ void main()
         }
     }
 
-    vel += dir * push.chorusPush;
+    vel += dir * chorusPush;
     float radialSpeed = dot(vel, dir);
-    float innerRadiusFactor = smoothstep(60.0, 160.0, dist);
+    
+    float innerRadiusFactor = smoothstep(60.0 * scale, 160.0 * scale, dist);
     vel -= fromCenter * (push.centerAttract * innerRadiusFactor);
 
-    if (dist > push.safeRadius) 
+    if (dist > safeRadius) 
     {
-        float excess = dist - push.safeRadius;
-        float brakeWindow = smoothstep(0.0, push.safeRadius * 0.75, excess);
+        float excess = dist - safeRadius;
+        float brakeWindow = smoothstep(0.0, safeRadius * 0.75, excess);
         
         if (radialSpeed > 0.0) {
             vel -= dir * (radialSpeed * brakeWindow * 0.45);
         }
-        vel -= dir * (excess * (push.driftScale * 0.05 + brakeWindow * 0.12));
+        vel -= dir * (excess * (driftScale * 0.05 + brakeWindow * 0.12));
     }
 
     vel *= push.velDamping;
     float speedSq = dot(vel, vel);
-    float maxSpeedSq = push.dynamicLimit * push.dynamicLimit;
+    float maxSpeedSq = dynamicLimit * dynamicLimit;
     if (speedSq > maxSpeedSq)
     {
-        vel *= (push.dynamicLimit / sqrt(speedSq));
+        vel *= (dynamicLimit / sqrt(speedSq));
     }
 
     vec2 prevPos = pos;
@@ -181,24 +188,23 @@ void main()
     {
         float particleSpeed = sqrt(pDeltaSq);
         float invParticleSpeed = 1.0 / particleSpeed;
-        float speedFactor = smoothstep(0.0, 3.5, particleSpeed);
+        float speedFactor = smoothstep(0.0, 3.5 * scale, particleSpeed);
 
         float storedHue = uintBitsToFloat(p.color);
         float targetBaseHue = push.baseRichHue + strandShift;
         float hueDiff = fract(targetBaseHue - storedHue + 0.5) - 0.5;
         storedHue = fract(storedHue + hueDiff * push.hueLerpSpeed);
 
-        float speedAccent = smoothstep(2.0, 20.0, particleSpeed) * 0.07;
+        float speedAccent = smoothstep(2.0 * scale, 20.0 * scale, particleSpeed) * 0.07;
         float displayHue = fract(storedHue + push.baseHueOffset - speedAccent);
-        float brightness = clamp(mix(0.85, 1.0, smoothstep(0.0, 15.0, particleSpeed)) + push.kickFlashBright, 0.0, 1.0);
+        float brightness = clamp(mix(0.85, 1.0, smoothstep(0.0, 15.0 * scale, particleSpeed)) + push.kickFlashBright, 0.0, 1.0);
 
         vec3 dyeColor = hsv2rgb(vec3(displayHue, push.saturation, brightness));
         p.color = floatBitsToUint(storedHue);
 
-        float forceRadius = push.forceRadius;
         float forceRadiusSq = forceRadius * forceRadius;
         float colorRadiusSq = forceRadiusSq * 0.81;
-        float invForceRadius = 1.0 / max(forceRadius, 0.001);
+        float invForceRadius = 1.0 / forceRadius;
 
         vec2 minPixel = min(prevPos, pos) - vec2(forceRadius);
         vec2 maxPixel = max(prevPos, pos) + vec2(forceRadius);
@@ -241,10 +247,19 @@ void main()
                     float swirlVal = clamp(sideDist * invForceRadius, -1.0, 1.0);
                     vec2 forceDir = fwd * 0.7 + side * (swirlVal * 1.3);
 
-                    vec2 addedV = forceDir * (splatBaseMag * forceInf);
                     vec2 currentV = imageLoad(inOutVelocity, coord).xy;
-                    
+                    vec2 vTarget = forceDir * splatBaseMag;
+                    vec2 deltaV = vTarget - currentV;
+                    vec2 addedV = deltaV * (forceInf * 0.45);
+
                     vec2 newV = currentV + addedV;
+
+                    float vSpeed = length(newV);
+                    float maxPhysSpeed = 2500.0 * scale;
+                    if (vSpeed > maxPhysSpeed)
+                    {
+                        newV = (newV / vSpeed) * (maxPhysSpeed + (vSpeed - maxPhysSpeed) / (1.0 + (vSpeed - maxPhysSpeed) * 0.001));
+                    }
 
                     imageStore(inOutVelocity, coord, vec4(newV, 0.0, 0.0));
 

@@ -75,6 +75,8 @@ public:
 
     void setComputeFinishedSemaphore(
         VkSemaphore semaphore);
+    
+    void onResize(uint32_t newWidth, uint32_t newHeight);
 
 private:
     void createSurface(sf::Window &window);

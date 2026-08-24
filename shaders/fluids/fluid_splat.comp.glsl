@@ -13,13 +13,13 @@ layout(rgba8, binding = 1) uniform image2D colorImage;
 
 void main()
 {
-    if (push.isMouseDown == 0) return;
+    if ((push.isMouseDown & 1) == 0) return;
 
     ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
     if (pos.x >= int(push.simWidth) || pos.y >= int(push.simHeight)) return;
 
-    float scaleX = float(push.simWidth) / float(push.windowWidth);
-    float scaleY = float(push.simHeight) / float(push.windowHeight);
+    float scaleX = float(push.simWidth) / 1920.0;
+    float scaleY = float(push.simHeight) / 1080.0;
 
     uint leftBound = uint(float(push.offsetFromLeft) * scaleX);
     uint rightOffset = uint(float(push.offsetFromRight) * scaleX);
@@ -45,7 +45,7 @@ void main()
     vec2 mDelta = m1 - m0;
 
     float dist = distToSegment(pixelPos, m0, m1);
-    float forceRadius = push.splatRadius;
+    float forceRadius = max(push.splatRadius, 1.0);
 
     if (dist > forceRadius) return;
 
@@ -55,26 +55,29 @@ void main()
     float mouseSpeed = length(mDelta);
     float speedFactor = (mouseSpeed < 0.001) ? 1.0 : smoothstep(0.0, 4.0, mouseSpeed);
 
-    float forceInf = exp(-(dist * dist) / (forceRadius * forceRadius * 0.4 + 0.001));
+    float forceFade = 1.0 - (dist / forceRadius);
+    float forceInf = exp(-(dist * dist) / (forceRadius * forceRadius * 0.4 + 0.001)) * forceFade;
+    
     vec2 fwd = (mouseSpeed > 0.0001) ? (mDelta / mouseSpeed) : normalize(pixelPos - m0 + vec2(0.0001));
     vec2 side = vec2(-fwd.y, fwd.x);
     vec2 toPixel = pixelPos - m0;
     float sideDist = dot(toPixel, side);
-    float swirl = clamp(sideDist / max(forceRadius, 0.001), -1.0, 1.0);
+    float swirl = clamp(sideDist / forceRadius, -1.0, 1.0);
     vec2 forceDir = fwd * 0.7 + side * (swirl * 1.3);
 
     vec2 mForceUV = forceDir * (max(mouseSpeed, 2.0) / screenRes.x);
     float simScaleFactor = simSize.x / screenRes.x;
     currentV += mForceUV * push.splatForce * simScaleFactor * forceInf * speedFactor;
-
     currentV = clamp(currentV, vec2(-60000.0), vec2(60000.0));
 
-    float colorRadius = forceRadius * 0.9;
-    if (dist < colorRadius)
+    float colorRadius = forceRadius * 0.95;
+    if (dist <= colorRadius)
     {
         vec3 dyeColor = (mouseSpeed < 1.5) ? vec3(0.0, 0.8, 1.0) : getVelocityColor(mDelta);
-        float colorInf = exp(-(dist * dist) / (colorRadius * colorRadius * 0.3 + 0.001));
-        float mixIntensity = colorInf * 0.65 * (0.2 + 0.8 * speedFactor);
+        
+        float colorEdge = smoothstep(colorRadius, colorRadius * 0.2, dist);
+        float mixIntensity = clamp(colorEdge * mix(0.75, 0.95, speedFactor), 0.0, 1.0);
+        
         currentC = mix(currentC, vec4(dyeColor, 1.0), mixIntensity);
     }
 

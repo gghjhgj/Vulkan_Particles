@@ -699,6 +699,52 @@ void Renderer::render(ImGuiManager &imgui)
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
+void Renderer::onResize(uint32_t newWidth, uint32_t newHeight)
+{
+    if (!initialized || newWidth == 0 || newHeight == 0)
+        return;
+
+    vkDeviceWaitIdle(vkContext->device);
+
+    for (VkSemaphore semaphore : renderFinishedSemaphores)
+    {
+        if (semaphore != VK_NULL_HANDLE)
+        {
+            vkDestroySemaphore(vkContext->device, semaphore, nullptr);
+        }
+    }
+    renderFinishedSemaphores.clear();
+
+    swapchain.destroy(vkContext->device);
+
+    swapchain.init(
+        *vkContext,
+        surface,
+        newWidth,
+        newHeight);
+
+    swapchainLayouts.assign(
+        swapchain.images.size(),
+        VK_IMAGE_LAYOUT_UNDEFINED);
+
+    renderFinishedSemaphores.resize(swapchain.images.size());
+
+    VkSemaphoreCreateInfo semaphoreInfo{};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    for (auto &semaphore : renderFinishedSemaphores)
+    {
+        if (vkCreateSemaphore(
+                vkContext->device,
+                &semaphoreInfo,
+                nullptr,
+                &semaphore) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to create render finished semaphore during resize.");
+        }
+    }
+}
+
 void Renderer::destroy()
 {
     if (!vkContext || vkContext->device == VK_NULL_HANDLE)

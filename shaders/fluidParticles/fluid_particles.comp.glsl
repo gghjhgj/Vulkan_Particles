@@ -38,6 +38,23 @@ vec2 sampleFluidVelocity(vec2 uv)
     return mix(mix(v00, v10, f.x), mix(v01, v11, f.x), f.y);
 }
 
+vec3 getEnergyPaletteColor(float speed, float scale)
+{
+    float s = clamp(speed / (9.0 * scale), 0.0, 2.0);
+
+    vec3 c0 = vec3(0.05, 0.45, 0.95);
+    vec3 c1 = vec3(0.55, 0.15, 0.95);
+    vec3 c2 = vec3(0.98, 0.40, 0.05);
+    vec3 c3 = vec3(1.00, 0.95, 0.85);
+
+    if (s < 0.5)
+        return mix(c0, c1, s * 2.0);
+    else if (s < 1.0)
+        return mix(c1, c2, (s - 0.5) * 2.0);
+    else
+        return mix(c2, c3, clamp(s - 1.0, 0.0, 1.0));
+}
+
 void main()
 {
     uint id = gl_GlobalInvocationID.x;
@@ -50,6 +67,8 @@ void main()
         push.windowWidth > 0 ? float(push.windowWidth) : 1920.0,
         push.windowHeight > 0 ? float(push.windowHeight) : 1080.0
     );
+
+    float scale = screenRes.y / 1080.0;
 
     if (isnan(p.x) || isnan(p.vx))
     {
@@ -65,41 +84,54 @@ void main()
 
     float dt = (push.dt > 0.0 && push.dt < 0.1) ? push.dt : 0.016;
 
+    float gridToPixel = (screenRes.x / simRes.x) * 15.0;
+    float pixelToGrid = 1.0 / max(gridToPixel, 0.0001);
+
     vec2 uv = pos / screenRes;
-    vec2 fluidVel = sampleFluidVelocity(uv);
+    vec2 fluidVelGrid = sampleFluidVelocity(uv);
+    vec2 fluidVelPixels = fluidVelGrid * gridToPixel;
 
-    vec2 fluidVelPixels = fluidVel * (screenRes.x / simRes.x) * 15.0;
-    
-    vel = mix(vel, fluidVelPixels, clamp(6.0 * dt, 0.0, 1.0));
+    float fluidDragCoeff = 3.2;
+    float fluidDragFactor = 1.0 - exp(-fluidDragCoeff * dt);
+    vel += (fluidVelPixels - vel) * fluidDragFactor;
 
-    if (push.isMouseDown != 0)
+    bool isRightDown = (push.isMouseDown & 2) != 0;
+    if (isRightDown)
     {
         vec2 mousePos = vec2(push.mouseX, push.mouseY);
-
         vec2 delta = pos - mousePos;
         float dist = length(delta);
 
-        const float RADIUS = 700.0;
-        const float MIN_RADIUS = 60.0;
+        float maxRadius  = 950.0 * scale;
+        float coreRadius = 40.0 * scale;
 
-        if (dist > 0.001 && dist < RADIUS)
+        if (dist > 1.0 && dist < maxRadius)
         {
-            float orbitRadius = clamp(dist, MIN_RADIUS, RADIUS);
-            float angle = atan(delta.y, delta.x);
+            float normDist = dist / maxRadius;
+            float t = 1.0 - normDist;
+            float influence = smoothstep(0.0, 1.0, t);
 
-            float t = 1.0 - dist / RADIUS;
-            float influence = t * t;
-            float angularSpeed = mix(8.0, 30.0, influence);
-            float nextAngle = angle + angularSpeed * dt;
+            vec2 tangent = vec2(-delta.y, delta.x) / dist;
+            vec2 radial  = -delta / dist;
 
-            vec2 targetPos = mousePos + vec2(cos(nextAngle), sin(nextAngle)) * orbitRadius;
-            vel = (targetPos - pos) / max(dt, 0.0001);
+            float orbitSpeed = mix(200.0 * scale, 1400.0 * scale, pow(t, 0.6));
+            float pullCurve  = sin(normDist * 3.14159265);
+            float pullSpeed  = mix(80.0 * scale, 600.0 * scale, pullCurve) * influence;
+
+            if (dist < coreRadius)
+            {
+                pullSpeed *= (dist / coreRadius);
+            }
+
+            vec2 targetVel = (tangent * orbitSpeed) + (radial * pullSpeed);
+            float driveRate = mix(3.5, 12.0, influence);
+            vel += (targetVel - vel) * (1.0 - exp(-driveRate * dt));
         }
     }
 
-    vel *= 0.985;
+    vel *= pow(0.995, dt * 60.0);
     
-    float maxVel = 20000.0;
+    float maxVel = 4000.0 * scale;
     if (length(vel) > maxVel)
         vel = normalize(vel) * maxVel;
 
@@ -117,72 +149,65 @@ void main()
     p.y = pos.y;
 
     vec2 pDelta = pos - prevPos;
-    float particleSpeed = length(pDelta);
+    float moveDistPixels = length(pDelta);
 
-    if (particleSpeed > 0.001)
+    if (moveDistPixels > 0.001)
     {
-        float speedFactor = smoothstep(0.0, 4.0, particleSpeed);
-        vec3 dyeColor = (particleSpeed < 1.0) ? vec3(0.0, 0.8, 1.0) : getVelocityColor(pDelta);
+        float speedFactor = smoothstep(0.0, 3.5 * scale, moveDistPixels);
+        vec3 dyeColor = getEnergyPaletteColor(moveDistPixels, scale);
 
-        float forceRadius = push.splatRadius;
+        vec2 particleGridVel = vel * pixelToGrid;
 
-        vec2 minPixel = min(prevPos, pos) - vec2(forceRadius);
-        vec2 maxPixel = max(prevPos, pos) + vec2(forceRadius);
+        float splatRadiusPixels = max(push.splatRadius * scale, 1.0);
 
-        ivec2 minGrid = clamp(ivec2(floor((minPixel / screenRes) * simRes)), ivec2(0), ivec2(int(push.simWidth) - 1, int(push.simHeight) - 1));
-        ivec2 maxGrid = clamp(ivec2(ceil((maxPixel / screenRes) * simRes)),   ivec2(0), ivec2(int(push.simWidth) - 1, int(push.simHeight) - 1));
+        vec2 cellSizePixels = screenRes / simRes;
+        float minCellDim = min(cellSizePixels.x, cellSizePixels.y);
 
-        float denomForce = max(forceRadius * forceRadius * 0.4, 0.0001);
-        float denomColor = max(forceRadius * forceRadius * 0.243, 0.0001);
+        float stepSizePixels = max(splatRadiusPixels * 0.75, minCellDim * 0.5);
+        int numSteps = clamp(int(ceil(moveDistPixels / stepSizePixels)), 1, 24);
+        float stepWeight = 1.0 / float(numSteps);
 
-        vec2 fwd = pDelta / particleSpeed;
-        vec2 side = vec2(-fwd.y, fwd.x);
+        float denomPixels = max(splatRadiusPixels * splatRadiusPixels * 0.45, 0.001);
+        float transferFractionBase = (1.0 - exp(-fluidDragCoeff * dt * 2.5)) * speedFactor;
 
-        for (int gy = minGrid.y; gy <= maxGrid.y; ++gy)
+        int maxW = int(push.simWidth) - 1;
+        int maxH = int(push.simHeight) - 1;
+
+        for (int step = 0; step < numSteps; ++step)
         {
-            int startX = minGrid.x + ((minGrid.x ^ gy ^ int(id)) & 1);
-            
-            for (int gx = startX; gx <= maxGrid.x; gx += 2)
-            {
-                vec2 cellPixelPos = ((vec2(gx, gy) + 0.5) / simRes) * screenRes;
-                float dist = distToSegment(cellPixelPos, prevPos, pos);
+            float t = (float(step) + 0.5) / float(numSteps);
+            vec2 samplePosPixels = mix(prevPos, pos, t);
 
-                if (dist < forceRadius)
+            vec2 minPixel = samplePosPixels - vec2(splatRadiusPixels);
+            vec2 maxPixel = samplePosPixels + vec2(splatRadiusPixels);
+
+            ivec2 minCell = clamp(ivec2(floor((minPixel / screenRes) * simRes)), ivec2(0), ivec2(maxW, maxH));
+            ivec2 maxCell = clamp(ivec2(ceil((maxPixel / screenRes) * simRes)),  ivec2(0), ivec2(maxW, maxH));
+
+            for (int gy = minCell.y; gy <= maxCell.y; ++gy)
+            {
+                for (int gx = minCell.x; gx <= maxCell.x; ++gx)
                 {
                     ivec2 coord = ivec2(gx, gy);
+                    
+                    vec2 cellPixelCenter = ((vec2(coord) + 0.5) / simRes) * screenRes;
+                    float distPixels = length(cellPixelCenter - samplePosPixels);
 
-                    float forceFade = clamp(1.0 - (dist * dist) / (forceRadius * forceRadius), 0.0, 1.0);
-                    float forceInf = exp(-(dist * dist) / denomForce) * forceFade;
-                    vec2 pDeltaUV = pDelta / screenRes;
-
-                    vec2 toCell = cellPixelPos - prevPos;
-                    float sideDist = dot(toCell, side);
-                    float swirl = clamp(sideDist / max(forceRadius, 0.001), -1.0, 1.0);
-                    vec2 forceDir = fwd * 0.35 + side * (swirl * 2.4);
-
-                    vec2 vFromParticle = forceDir * (length(pDeltaUV) * push.splatForce);
-
-                    vec2 currentV = imageLoad(inOutVelocity, coord).xy;
-                    vec2 addedV = vFromParticle * forceInf * speedFactor;
-
-                    vec2 newV = currentV + addedV;
-                    newV = clamp(newV, vec2(-60000.0), vec2(60000.0));
-
-                    imageStore(inOutVelocity, coord, vec4(newV, 0.0, 0.0));
-
-                    float colorRadius = forceRadius * 0.9;
-                    float colorRadiusSq = colorRadius * colorRadius;
-                    float distSq = dist * dist;
-
-                    if (distSq < colorRadiusSq)
+                    if (distPixels <= splatRadiusPixels)
                     {
-                        float colorEdgeFade = smoothstep(colorRadiusSq, colorRadiusSq * 0.4, distSq);
-                        float colorInf = exp(-distSq / denomColor);
-                        float mixIntensity = clamp(colorInf * 0.65 * (0.1 + 0.9 * speedFactor) * colorEdgeFade, 0.0, 1.0);
+                        float fade = 1.0 - (distPixels / splatRadiusPixels);
+                        float w = exp(-(distPixels * distPixels) / denomPixels) * fade * stepWeight;
 
+                        vec2 currentFluidV = imageLoad(inOutVelocity, coord).xy;
+                        vec2 relVel = particleGridVel - currentFluidV;
+                        
+                        float transferRate = clamp(w * transferFractionBase * 0.4, 0.0, 0.45);
+                        vec2 newFluidV = currentFluidV + relVel * transferRate;
+                        imageStore(inOutVelocity, coord, vec4(newFluidV, 0.0, 0.0));
+
+                        float mixIntensity = clamp(w * 0.5 * (0.1 + 0.9 * speedFactor), 0.0, 0.85);
                         vec4 currentC = imageLoad(inOutColor, coord);
                         vec3 newC = mix(currentC.rgb, dyeColor, mixIntensity);
-
                         imageStore(inOutColor, coord, vec4(newC, 1.0));
                     }
                 }

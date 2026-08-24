@@ -51,8 +51,8 @@ vec2 getProjectedVelocity(ivec2 p, ivec2 minBound, ivec2 maxBound, vec2 invSim, 
 
 void main()
 {
-    float scaleX = float(push.simWidth) / float(push.windowWidth);
-    float scaleY = float(push.simHeight) / float(push.windowHeight);
+    float scaleX = float(push.simWidth) / 1920.0;
+    float scaleY = float(push.simHeight) / 1080.0;
 
     uint leftBound = uint(float(push.offsetFromLeft) * scaleX);
     uint rightOffset = uint(float(push.offsetFromRight) * scaleX);

@@ -82,7 +82,21 @@ int main()
                 imgui.processEvent(*event);
 
                 if (event->is<sf::Event::Closed>())
+                {
                     running = false;
+                }
+                else if (const auto *resized = event->getIf<sf::Event::Resized>())
+                {
+                    uint32_t newW = resized->size.x;
+                    uint32_t newH = resized->size.y;
+                    if (newW > 0 && newH > 0)
+                    {
+                        Config::window.width = newW;
+                        Config::window.height = newH;
+                        renderer.onResize(newW, newH);
+                        needsGpuFlush = true;
+                    }
+                }
             }
 
             if (simulationStarted && (warmupTimer < 2.0f || needsGpuFlush))
@@ -95,7 +109,9 @@ int main()
             float dt = std::min(rawDt, 0.033f);
 
             sf::Vector2i mousePos = sf::Mouse::getPosition(window);
-            bool isMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+            bool isLeftDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+            bool isRightDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Right);
+            bool isMouseDown = isLeftDown || isRightDown;
 
             imgui.newFrame(window);
 
@@ -230,7 +246,7 @@ int main()
                     push.windowWidth  = Config::window.width;
                     push.windowHeight = Config::window.height;
                     
-                    push.isMouseDown = isMouseDown ? 1 : 0;
+                    push.isMouseDown = isLeftDown ? 1 : 0;
                     push.offsetFromLeft = Config::fluid.offsetFromLeft;
                     push.offsetFromRight = Config::fluid.offsetFromRight;
                     push.omega = Config::fluid.omega;
@@ -267,14 +283,17 @@ int main()
                     push.windowWidth  = Config::window.width;
                     push.windowHeight = Config::window.height;
 
-                    push.isMouseDown = isMouseDown ? 1 : 0;
+                    push.isMouseDown = (isLeftDown ? 1 : 0) | (isRightDown ? 2 : 0);
                     push.offsetFromLeft = Config::fluid.offsetFromLeft;
                     push.offsetFromRight = Config::fluid.offsetFromRight;
                     push.omega = Config::fluid.omega;
                     push.pressureSteps = Config::fluid.pressureSteps;
 
+                    FluidPushConstants fluidPush = push;
+                    fluidPush.isMouseDown = isLeftDown ? 1 : 0;
+
                     fluidParticles.update(vulkanContext, particles, fluid, &push, sizeof(FluidPushConstants));
-                    fluid.update(vulkanContext, &push, sizeof(FluidPushConstants), fluidParticles.getComputeFinishedSemaphore());
+                    fluid.update(vulkanContext, &fluidPush, sizeof(FluidPushConstants), fluidParticles.getComputeFinishedSemaphore());
                     renderer.setFluidTexture(fluid.getActiveColorTexture(), fluid.getSimWidth(), fluid.getSimHeight());
                 }
                 else if (controlMode == ControlMode::FluidParticlesMusic)
