@@ -584,7 +584,7 @@ if(BUILD_SHADERS)
     message(STATUS "Searching GLSL shaders")
     message(STATUS "================================================")
 
-    # Szukanie wszystkich plikow z typowymi rozszerzeniami shaderow
+    # Search for all files with typical shader extensions
     file(GLOB_RECURSE SHADER_SOURCES
         CONFIGURE_DEPENDS
         "${PROJECT_SOURCE_DIR}/shaders/*.glsl"
@@ -611,7 +611,7 @@ if(BUILD_SHADERS)
         )
 
         # ------------------------------------------------------------
-        # Detect shader stage (obsluguje np. fluid.comp, fluid.comp.glsl, fluid_comp.glsl)
+        # Detect shader stage (supports e.g. fluid.comp, fluid.comp.glsl, fluid_comp.glsl)
         # ------------------------------------------------------------
 
         if(SHADER_NAME MATCHES "[._]vert(\\.[^.]*)?$")
@@ -656,7 +656,7 @@ if(BUILD_SHADERS)
 
         else()
 
-            # Pliki bez okreslonego etapu (np. particle.glsl, struct.glsl) sa pomijane
+            # Files without a defined stage (e.g. particle.glsl, struct.glsl) are skipped
             continue()
 
         endif()
@@ -671,8 +671,8 @@ if(BUILD_SHADERS)
             "${SHADER}"
         )
 
-        # Jesli plik konczy sie na .glsl, podmieniamy .glsl na .spv (np. fluid.comp.glsl -> fluid.comp.spv)
-        # Jesli konczy sie na np. .comp, dopisujemy .spv (np. fluid.comp -> fluid.comp.spv)
+        # If the file ends with .glsl, replace .glsl with .spv (e.g. fluid.comp.glsl -> fluid.comp.spv)
+        # If it ends with e.g. .comp, append .spv (e.g. fluid.comp -> fluid.comp.spv)
         if(REL_PATH MATCHES "\\.glsl$")
             string(
                 REGEX REPLACE
