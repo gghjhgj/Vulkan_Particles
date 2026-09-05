@@ -55,24 +55,24 @@ Particles are steered using the mouse as a gravity source.
 **Stress tests:**
 
 * **300k particles** — particle size 10, tail length 50 → ~60 FPS
-[Watch demo](https://streamable.com/ap9luv)
+[▶️ Watch demo(Streamable)](https://streamable.com/ap9luv)
 
 * **3M particles** — particle size 1, no tail → ~60 FPS
-[Watch demo](https://streamable.com/z5cwsn)
+[▶️ Watch demo(Streamable)](https://streamable.com/z5cwsn)
 
 ---
 
 ### 2. MusicParticles
 
 Particles are steered in a circular motion based on music.
-[▶️ Watch demo](https://streamable.com/5gp2dn)
+[▶️ Watch demo(Streamable)](https://streamable.com/5gp2dn)
 
 ---
 
 ### 3. FluidMouse
 
 A `FluidSystem` simulation where fluid color and velocity are injected using the mouse.
-[Watch demo](https://streamable.com/idljxs)
+[▶️ Watch demo(Streamable)](https://streamable.com/idljxs)
 
 ---
 
@@ -87,10 +87,10 @@ Particles inject color and velocity into the fluid, while the fluid velocity is 
 **Stress tests:**
 
 * **500k fluid particles** → ~60 FPS
-[Watch demo](https://streamable.com/ujhf34)
+[▶️ Watch demo(Streamable)](https://streamable.com/ujhf34)
 
 * **5M fluid particles** → ~25 FPS
-[Watch demo](https://streamable.com/8a6hr8)
+[▶️ Watch demo(Streamable)](https://streamable.com/8a6hr8)
 
 ---
 
@@ -103,4 +103,4 @@ Particles inject velocity and color into the fluid, while particle movement is s
 * **4K UHD fluid resolution** — 60 FPS, full screen simulated
 * **5K fluid resolution** — 60 FPS, pressure simulation at half resolution; unused sides are cut
 
-[Watch demo](https://streamable.com/6ucqer)
+[▶️ Watch demo(Streamable)](https://streamable.com/6ucqer)
