@@ -46,6 +46,8 @@ I decided to return to the original CPU-based CivSim version without Vulkan, but
 
 ## Modules & Benchmarks
 
+> **Video quality:** Videos are compressed for web presentation and may not represent the original rendering quality. This is particularly noticeable in the `FluidParticlesMusic` demo.
+
 ### 1. MouseParticles
 
 Particles are steered using the mouse as a gravity source.
@@ -53,7 +55,10 @@ Particles are steered using the mouse as a gravity source.
 **Stress tests:**
 
 * **300k particles** — particle size 10, tail length 50 → ~60 FPS
-* **2M particles** — particle size 1, no tail → ~60 FPS
+* <video src="docs/particles300kR.mp4" controls width="100%"></video>
+
+* **3M particles** — particle size 1, no tail → ~60 FPS
+<video src="docs/Particles3mR.mp4" controls width="100%"></video>
 
 ---
 
@@ -61,12 +66,14 @@ Particles are steered using the mouse as a gravity source.
 
 Particles are steered in a circular motion based on music.
 
+<video src="docs/particlesMusicR.mp4" controls width="100%"></video>
 ---
 
 ### 3. FluidMouse
 
 A `FluidSystem` simulation where fluid color and velocity are injected using the mouse.
 
+<video src="docs/MouseR.mp4" controls width="100%"></video>
 ---
 
 ### 4. FluidParticles
@@ -80,7 +87,10 @@ Particles inject color and velocity into the fluid, while the fluid velocity is 
 **Stress tests:**
 
 * **500k fluid particles** → ~60 FPS
+<video src="docs/FluidParticlesR.mp4" controls width="100%"></video>
+
 * **5M fluid particles** → ~25 FPS
+<video src="docs/FluidParticles5m25fpsR.mp4" controls width="100%"></video>
 
 ---
 
@@ -91,4 +101,6 @@ Particles inject velocity and color into the fluid, while particle movement is s
 **Stress tests:**
 
 * **4K UHD fluid resolution** — 60 FPS, full screen simulated
-* **5K UHD fluid resolution** — 60 FPS, pressure simulation at half resolution; unused sides are cut
+* **5K fluid resolution** — 60 FPS, pressure simulation at half resolution; unused sides are cut
+
+<video src="docs/fluidParticlesMusicR.mp4" controls width="100%"></video>
