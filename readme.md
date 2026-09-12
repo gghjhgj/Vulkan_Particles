@@ -1,8 +1,17 @@
-## Idea
+## Context & Goals
 
-This project started as an experimental project for my Civilization Simulation. However, it turned out that GPU–CPU data synchronization wasn't worth the overhead, and the human simulation logic wasn't easy to implement in a completely branchless way.
+This project started as an attempt to offload my Civilization Simulation to the GPU. It quickly became clear that this was the wrong tool for the job: memory transfer overhead killed performance, and trying to write human logic in a GPU-friendly, branchless way was difficult. I moved the simulation entirely back to the CPU and kept the Vulkan codebase as a learning sandbox.
 
-I decided to return to the original CPU-based CivSim version without Vulkan, but was left with the `"VK"` folder.
+By far the hardest part of this project wasn't building any individual subsystem in isolation, but the cognitive load of holding all of them in my head at once—connecting them together, managing synchronization, pipeline barriers, and layout transitions. 
+
+I approached this as a systems programming learning project rather than as a domain expert in fluid dynamics, audio DSP, or Vulkan internals. Taking on all three simultaneously meant constantly running into blind spots—often stumbling over things that an experienced graphics or engine programmer would consider second nature. To make sense of it all and keep track of how the hardware actually ticks, I ended up filling ~40 pages of notes and diagrams.
+
+This is not a polished production engine; it is a personal sandbox built to hit those walls head-on and build an intuitive mental model of low-level systems.
+
+### Goals:
+* **Subsystem Integration:** Connecting Windows WASAPI audio capture, real-time FFT, fluid solver, and particle physics into a single frame loop.
+* **Vulkan Compute Pipeline:** Getting hands-on experience with Vulkan 1.3 compute pipelines, synchronization, and performance optimization.
+* **Performance on Integrated Graphics:** Exploring how far I can push the project on integrated GPU
 
 ---
 
