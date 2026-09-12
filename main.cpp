@@ -74,9 +74,12 @@ int main()
         sf::Vector2i lastMousePos = sf::Mouse::getPosition(window);
         bool wasMouseDown = false;
         sf::Clock clock;
+        sf::Clock frameTimer;
 
         while (running)
         {
+            frameTimer.restart();
+
             while (const std::optional event = window.pollEvent())
             {
                 imgui.processEvent(*event);
@@ -133,15 +136,15 @@ int main()
                     if (controlMode == ControlMode::MouseParticles || controlMode == ControlMode::MusicParticles)
                     {
                         const char *shaderPath = controlMode == ControlMode::MouseParticles
-                            ? "shaders/particles/particle.comp.spv"
-                            : "shaders/particles/music.comp.spv";
+                                                     ? "shaders/particles/particle.comp.spv"
+                                                     : "shaders/particles/music.comp.spv";
 
                         uint32_t pushConstantSize = controlMode == ControlMode::MouseParticles
-                            ? sizeof(ComputePush)
-                            : sizeof(MusicPush::Data);
+                                                        ? sizeof(ComputePush)
+                                                        : sizeof(MusicPush::Data);
 
                         particles.init(vulkanContext, Config::particles.count, Config::window.width, Config::window.height, shaderPath, pushConstantSize);
-                        
+
                         renderer.setParticleBuffer(particles.getBuffer(), particles.getCount());
                         renderer.setComputeFinishedSemaphore(particles.getComputeFinishedSemaphore());
 
@@ -151,13 +154,14 @@ int main()
                             if (!wasapiCapture.init())
                                 throw std::runtime_error("Failed to initialize WASAPI capture.");
 
-                            audioThread = std::thread([&wasapiCapture]() { wasapiCapture.run(); });
+                            audioThread = std::thread([&wasapiCapture]()
+                                                      { wasapiCapture.run(); });
                         }
                     }
                     else if (controlMode == ControlMode::FluidMouse)
                     {
                         fluid.init(vulkanContext, Config::fluid.simWidth, Config::fluid.simHeight, "shaders/fluids/fluid.comp.spv", sizeof(FluidPushConstants));
-                        
+
                         renderer.setFluidTexture(fluid.getActiveColorTexture(), fluid.getSimWidth(), fluid.getSimHeight());
                         renderer.setComputeFinishedSemaphore(fluid.getComputeFinishedSemaphore());
                     }
@@ -165,19 +169,19 @@ int main()
                     {
                         fluid.init(vulkanContext, Config::fluid.simWidth, Config::fluid.simHeight, "shaders/fluids/fluid.comp.spv", sizeof(FluidPushConstants));
                         particles.init(vulkanContext, Config::particles.count, Config::window.width, Config::window.height,
-                            controlMode == ControlMode::FluidParticles ? "shaders/particles/particle.comp.spv" : "shaders/particles/music.comp.spv",
-                            controlMode == ControlMode::FluidParticles ? sizeof(ComputePush) : sizeof(MusicPush::Data));
+                                       controlMode == ControlMode::FluidParticles ? "shaders/particles/particle.comp.spv" : "shaders/particles/music.comp.spv",
+                                       controlMode == ControlMode::FluidParticles ? sizeof(ComputePush) : sizeof(MusicPush::Data));
 
                         const char *shaderPath = controlMode == ControlMode::FluidParticles
-                            ? "shaders/fluidParticles/fluid_particles.comp.spv"
-                            : "shaders/fluidParticles/fluid_particles_music.comp.spv";
+                                                     ? "shaders/fluidParticles/fluid_particles.comp.spv"
+                                                     : "shaders/fluidParticles/fluid_particles_music.comp.spv";
 
                         uint32_t pushConstantSize = controlMode == ControlMode::FluidParticles
-                            ? sizeof(FluidPushConstants)
-                            : sizeof(FluidParticlesMusicPushConstants::Data);
+                                                        ? sizeof(FluidPushConstants)
+                                                        : sizeof(FluidParticlesMusicPushConstants::Data);
 
                         fluidParticles.init(vulkanContext, particles, fluid, shaderPath, pushConstantSize);
-                        
+
                         renderer.setParticleBuffer(particles.getBuffer(), particles.getCount());
                         renderer.setFluidTexture(fluid.getActiveColorTexture(), fluid.getSimWidth(), fluid.getSimHeight());
                         renderer.setComputeFinishedSemaphore(fluid.getComputeFinishedSemaphore());
@@ -188,7 +192,8 @@ int main()
                             if (!wasapiCapture.init())
                                 throw std::runtime_error("Failed to initialize WASAPI capture.");
 
-                            audioThread = std::thread([&wasapiCapture]() { wasapiCapture.run(); });
+                            audioThread = std::thread([&wasapiCapture]()
+                                                      { wasapiCapture.run(); });
                         }
                     }
                 }
@@ -210,7 +215,7 @@ int main()
                 else if (controlMode == ControlMode::MusicParticles)
                 {
                     MusicPush::Data push = wasapiCapture.getMusicPush();
-                    
+
                     push.bass *= audioRampUp;
                     push.mid *= audioRampUp;
                     push.treble *= audioRampUp;
@@ -237,15 +242,15 @@ int main()
                     push.densityDissipation = Config::fluid.densityDissipation;
                     push.vorticity = Config::fluid.vorticity;
 
-                    push.renderWidth  = fluid.getSimWidth();
+                    push.renderWidth = fluid.getSimWidth();
                     push.renderHeight = fluid.getSimHeight();
-                    push.simWidth     = fluid.getSimWidth();
-                    push.simHeight    = fluid.getSimHeight();
-                    push.pressWidth   = fluid.getPressWidth();
-                    push.pressHeight  = fluid.getPressHeight();
-                    push.windowWidth  = Config::window.width;
+                    push.simWidth = fluid.getSimWidth();
+                    push.simHeight = fluid.getSimHeight();
+                    push.pressWidth = fluid.getPressWidth();
+                    push.pressHeight = fluid.getPressHeight();
+                    push.windowWidth = Config::window.width;
                     push.windowHeight = Config::window.height;
-                    
+
                     push.isMouseDown = isLeftDown ? 1 : 0;
                     push.offsetFromLeft = Config::fluid.offsetFromLeft;
                     push.offsetFromRight = Config::fluid.offsetFromRight;
@@ -274,13 +279,13 @@ int main()
                     push.densityDissipation = Config::fluid.densityDissipation;
                     push.vorticity = Config::fluid.vorticity;
 
-                    push.renderWidth  = fluid.getSimWidth();
+                    push.renderWidth = fluid.getSimWidth();
                     push.renderHeight = fluid.getSimHeight();
-                    push.simWidth     = fluid.getSimWidth();
-                    push.simHeight    = fluid.getSimHeight();
-                    push.pressWidth   = fluid.getPressWidth();
-                    push.pressHeight  = fluid.getPressHeight();
-                    push.windowWidth  = Config::window.width;
+                    push.simWidth = fluid.getSimWidth();
+                    push.simHeight = fluid.getSimHeight();
+                    push.pressWidth = fluid.getPressWidth();
+                    push.pressHeight = fluid.getPressHeight();
+                    push.windowWidth = Config::window.width;
                     push.windowHeight = Config::window.height;
 
                     push.isMouseDown = (isLeftDown ? 1 : 0) | (isRightDown ? 2 : 0);
@@ -312,13 +317,13 @@ int main()
                     fluidPush.densityDissipation = Config::fluid.densityDissipation;
                     fluidPush.vorticity = Config::fluid.vorticity;
 
-                    fluidPush.renderWidth  = fluid.getSimWidth();
+                    fluidPush.renderWidth = fluid.getSimWidth();
                     fluidPush.renderHeight = fluid.getSimHeight();
-                    fluidPush.simWidth     = fluid.getSimWidth();
-                    fluidPush.simHeight    = fluid.getSimHeight();
-                    fluidPush.pressWidth   = fluid.getPressWidth();
-                    fluidPush.pressHeight  = fluid.getPressHeight();
-                    fluidPush.windowWidth  = Config::window.width;
+                    fluidPush.simWidth = fluid.getSimWidth();
+                    fluidPush.simHeight = fluid.getSimHeight();
+                    fluidPush.pressWidth = fluid.getPressWidth();
+                    fluidPush.pressHeight = fluid.getPressHeight();
+                    fluidPush.windowWidth = Config::window.width;
                     fluidPush.windowHeight = Config::window.height;
 
                     fluidPush.isMouseDown = 0;
@@ -330,8 +335,8 @@ int main()
                     fluidPush.pressureSteps = Config::fluid.pressureSteps;
 
                     fluidParticlesMusicPush.update(musicData, dt, Config::fluid.splatRadius, Config::fluid.splatForce * audioRampUp,
-                        Config::fluid.velocityDissipation, Config::fluid.densityDissipation, Config::fluid.vorticity,
-                        fluid.getSimWidth(), fluid.getSimHeight(), Config::window.width, Config::window.height);
+                                                   Config::fluid.velocityDissipation, Config::fluid.densityDissipation, Config::fluid.vorticity,
+                                                   fluid.getSimWidth(), fluid.getSimHeight(), Config::window.width, Config::window.height);
 
                     const auto &fpData = fluidParticlesMusicPush.get();
 
@@ -351,6 +356,19 @@ int main()
             if (renderDuration > 0.040f)
             {
                 needsGpuFlush = true;
+            }
+
+            if (Config::limits.FPS > 60)
+            {
+                const sf::Time targetFrameTime =
+                    sf::seconds(1.0f / static_cast<float>(Config::limits.FPS));
+
+                const sf::Time elapsed = frameTimer.getElapsedTime();
+
+                if (elapsed < targetFrameTime)
+                {
+                    sf::sleep(targetFrameTime - elapsed);
+                }
             }
         }
 

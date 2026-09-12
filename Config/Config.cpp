@@ -11,6 +11,7 @@ WindowConfig Config::window;
 ParticlesConfig Config::particles;
 FluidConfig Config::fluid;
 VisualsConfig Config::visuals;
+LimitsConfig Config::limits;
 
 namespace {
     using Section = std::unordered_map<std::string, std::string>;
@@ -138,4 +139,5 @@ void Config::load(const std::string& path) {
     visuals.gamma = get<float>(ini, "visuals", "gamma");
     visuals.exposure = get<uint32_t>(ini, "visuals", "exposure");
     visuals.blurStrength = get<uint32_t>(ini, "visuals", "blur_strength");
+    limits.FPS = get<int>(ini, "limits", "FPS");
 }

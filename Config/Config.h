@@ -51,6 +51,9 @@ struct VisualsConfig {
     float exposure;
     float blurStrength;
 };
+struct LimitsConfig{
+    int FPS;
+};
 
 class Config
 {
@@ -59,6 +62,7 @@ public:
     static ParticlesConfig particles;
     static FluidConfig fluid;
     static VisualsConfig visuals;
+    static LimitsConfig limits;
 
     static void load(const std::string& path);
 };
